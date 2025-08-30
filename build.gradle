@@ -82,7 +82,10 @@ minecraft {
         // applies to all the run configs below
         configureEach {
             workingDirectory project.file('run')
-
+            jvmArgs = [
+                    "-XX:+IgnoreUnrecognizedVMOptions",
+                    "-XX:+AllowEnhancedClassRedefinition"
+            ]
             // Recommended logging data for a userdev environment
             // The markers can be added/remove as needed separated by commas.
             // "SCAN": For mods scan.
@@ -95,6 +98,8 @@ minecraft {
             // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
             property 'forge.logging.console.level', 'debug'
 
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
             mods {
                 "${mod_id}" {
                     source sourceSets.main
@@ -194,8 +199,8 @@ dependencies {
 
 // MixinGradle Settings
 mixin {
-    add sourceSets.main, 'mixins.tinker_zenith.refmap.json'
-    config 'mixins.tinker_zenith.json'
+    add sourceSets.main, 'tinker_zenith.mixin.refmap.json'
+    config 'tinker_zenith.mixin.json'
     debug.verbose = true
     debug.export = true
 }
@@ -211,6 +216,7 @@ tasks.named('processResources', ProcessResources).configure {
             loader_version_range: loader_version_range,
             mod_id: mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version,
             mod_authors: mod_authors, mod_description: mod_description,
+            tconstruct_version_range: tconstruct_version_range,
     ]
     inputs.properties replaceProperties
 
