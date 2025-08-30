@@ -18,7 +18,7 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 
 @OnlyIn(Dist.CLIENT)
 public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
-    private final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(TinkerZenith.ModId, "textures/model/flying_sword.png");
+    private final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(TinkerZenith.ModId, "");
     private final ItemRenderer itemRenderer;
 
     public FlyingSwordRenderer(EntityRendererProvider.Context renderManager) {
@@ -81,8 +81,8 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
 //        model.renderToBuffer(poseStack, vertexConsumer, packedLight, OverlayTexture.NO_OVERLAY,
 //                1.0f, 1.0f, 1.0f, 1.0f);
 
-        /// 参考: package net.minecraft.world.entity.decoration;
-        /// ItemFrame
+        /// 参考: package net.minecraft.world.entity.decoration.ItemFrame;
+        /// 四元数: [@Github] https://github.com/Krasjet/quaternion
         /// 大概render在clientSide跑, flyingSword是服务端实体, 想要有材质得把stack从服务端同步过来. 见FlyingSword#defineSynchedData
 
         // todo: 缩放、旋转、对齐、拖尾
@@ -91,6 +91,7 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
         poseStack.translate(0, .5, 0);
         poseStack.scale(2, 2, 2);
 
+        // 08/30 顺序有影响, 四元数究竟是怎样的原理?
         poseStack.mulPose(Axis.YP.rotationDegrees(entityYaw));
         poseStack.mulPose(Axis.ZP.rotationDegrees(-135));
 

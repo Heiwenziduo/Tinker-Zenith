@@ -40,21 +40,24 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     private static final String MASTER_UUID = "MasterUUID";
     private static final String SLOT_NUMBER = "SlotNumber";
     // private static final String BEHAVIOR_MODE = "BehaviorMode";
-    private static final String ITEM_STACK = "ItemStack";
+    // private static final String ITEM_STACK = "ItemStack";
 
     // initialization
     private static final Logger LOGGER = LogUtils.getLogger();
     public static final int maxLifetime = 40;
-    private static final double displayDensity = .3;
-    private static final int maxLunchCooldown = 18; // 这也是魔法数, 设计上应当9把剑都存在时可以无缝交替发射, 参考九剑词条中的魔法数
+    private static final double displayDensity = .3; // 排列密度
+    private static final int maxLunchCooldown = 10; // 这也是魔法数, 设计上应当9剑都存在时可以无缝交替发射, 参考九剑词条中的魔法数
     private static final int windowOfAttackTick = 8; // 决定了剑会多久抵达目标点
-    private static final String[] BEHAVIOR_MODE_LIST = {"IDLE", "LAUNCH", "RECOUP"};
-
+    public enum BEHAVIOR_MODE_LIST{
+        IDLE,
+        LAUNCH,
+        RECOUP
+    }
     // normalAttributes
     public boolean noPhysics = true;
     private Player master;
     private String masterUUID;
-    private String behaviorMode = "IDLE";
+    private BEHAVIOR_MODE_LIST behaviorMode = BEHAVIOR_MODE_LIST.IDLE;
     private ItemStack itemStack;
     private int slotNumber;
     private int lifeTime = maxLifetime;
@@ -119,18 +122,18 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
             return;
         }
 
-        if(!Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST[1]) && isAboutToDiscard) discard();
+        if(!Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST.LAUNCH) && isAboutToDiscard) discard();
         // 飞剑合法性检测: 距离, 维度, 对应物品栏工具
         if(tickCount % 20 == 0) {
             if(!checkToolStackValidate() || !checkDimensionValidate() || !checkDistanceValidate()) discard();
         }
 
-        if(lunchCooldown>0 && !Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST[1])) lunchCooldown--;
+        if(lunchCooldown>0 && !Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST.LAUNCH)) lunchCooldown--;
 
-        if(Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST[0])){
+        if(Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST.IDLE)){
             // idle
             IdleMode();
-        } else if (Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST[1])) {
+        } else if (Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST.LAUNCH)) {
             // lunching
             LunchingMode();
             checkHitBoxCollide();
@@ -156,7 +159,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     // 飞剑需要定期确定召唤者在身边，且对应slot的匠魂工具中有此剑的uuid
     private boolean checkToolStackValidate() {
         if(itemStack == null) return false;
-        // tinkerTool只有正常用构造器调用时才不为null且该值不写入硬盘, 故重建存档时销毁所有现存飞剑  (飞剑已经渐渐变成消耗品了, 悲
+        // tinkerTool只有正常用构造器调用时才不为null且该值不写入硬盘, 故重建存档时销毁所有现存飞剑
         // 若后续遇到性能问题再考虑优化实现 (例如对tinker工具的引用占用太多内存)
         // 破案了, IToolStackView是工具栈堆快照, 不动态更新
         // todo 基于工具检测的飞剑销毁还有问题
@@ -227,11 +230,11 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
 
         position0 = position();
         lookingAngle = master.getLookAngle();
-        if(lookingAngle.y == 1 || lookingAngle.y == -1 || (lookingAngle.x == 0 && lookingAngle.z == 0)) return position0; // 避免抬头望天时缩成一团
+        if(lookingAngle.y == 1 || lookingAngle.y == -1 || behaviorMode != BEHAVIOR_MODE_LIST.RECOUP) return position0; // 避免抬头望天时缩成一团
 
         slotCoefficient = Math.ceil((double) slotNumber /2);
         horizontalOffset = Math.pow(-1, slotNumber) * slotCoefficient * displayDensity;
-        verticalOffset = 1.0 - slotCoefficient * .15;
+        verticalOffset = 1.0 - slotCoefficient * displayDensity / 2;
 
         masterBack = lookingAngle.scale(-1.2 + 0.1 * slotCoefficient); // 排列为弧形
         back = new Vec3(masterBack.x, 0, masterBack.z).normalize();
@@ -270,7 +273,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
             setDeltaMovement(position().subtract(pos0));
 
         } else {
-            setBehaviorMode(2);
+            setBehaviorMode(BEHAVIOR_MODE_LIST.RECOUP);
             recoupTickRemaining = windowOfAttackTick;
             // 立刻调用一次, 不然在目标点有1tick停顿
             RecoupingMode();
@@ -284,7 +287,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
 
     public boolean triggerLunch(Vec3 targetPoint, float pitch, float yaw) {
         if(!canLunch()) return false;
-        setBehaviorMode(1);
+        setBehaviorMode(BEHAVIOR_MODE_LIST.LAUNCH);
         lunchCooldown = maxLunchCooldown;
         lunchTickRemaining = windowOfAttackTick;
         // 发射路径会在一开始就确定好
@@ -331,7 +334,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
             setPos(lunchModeTarget.add(posEllipse));
             setDeltaMovement(position().subtract(pos0));
         } else {
-            setBehaviorMode(0);
+            setBehaviorMode(BEHAVIOR_MODE_LIST.IDLE);
         }
     }
 
@@ -340,20 +343,21 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     }
     private void facePoint(Vec3 target) {
         //entity#lookAt方法
-        Vec3 vec3 = position();
-        double d0 = target.x - vec3.x;
-        double d1 = target.y - vec3.y;
-        double d2 = target.z - vec3.z;
+        Vec3 sword = position();
+        double d0 = target.x - sword.x;
+        double d1 = target.y - sword.y;
+        double d2 = target.z - sword.z;
         double d3 = Math.sqrt(d0 * d0 + d2 * d2);
         setXRot(Mth.wrapDegrees((float)(-(Mth.atan2(d1, d3) * (double)(180F / (float)Math.PI)))));
-        setYRot(Mth.wrapDegrees((float)(Mth.atan2(d2, d0) * (double)(180F / (float)Math.PI)) - 90.0F));
+        //setYRot(Mth.wrapDegrees((float)(Mth.atan2(d2, d0) * (double)(180F / (float)Math.PI)) - 90.0F));
+        setYRot(Mth.wrapDegrees((float) (Math.atan2(d0, d2) * (double)(180F / (float)Math.PI))));
         xRotO = getXRot();
         yRotO = getYRot();
     }
 
     /** 获取就绪状态 */
     private boolean canLunch() {
-        return lunchCooldown <= 0 && Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST[0]);
+        return lunchCooldown <= 0 && Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST.IDLE);
     }
 
     @Override
@@ -451,7 +455,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
 
 
     // 一些简写 ===================================
-    public String getBehaviorMode() {
+    public BEHAVIOR_MODE_LIST getBehaviorMode() {
         return behaviorMode;
     }
 
@@ -464,11 +468,8 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         //entityData.set(DATA_SLOT_NUMBER, slot);
     }
     /** @param mode: 0--IDLE; 1--LUNCH; 2--RECOUP */
-    private void setBehaviorMode(int mode) {
-        // todo: 把状态机换成enum类型
-        // assume 0 <= mode <= 2
-        String toMode = BEHAVIOR_MODE_LIST[mode];
-        behaviorMode = toMode;
+    private void setBehaviorMode(BEHAVIOR_MODE_LIST mode) {
+        behaviorMode = mode;
         //entityData.set(DATA_BEHAVIOR_MODE, toMode);
     }
     private void setItemStack(ItemStack stack) {
@@ -476,9 +477,4 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         getEntityData().set(DATA_ITEM_STACK, stack);
     }
 
-
-    //
-    static {
-        enum ABCDEF{}
-    }
 }

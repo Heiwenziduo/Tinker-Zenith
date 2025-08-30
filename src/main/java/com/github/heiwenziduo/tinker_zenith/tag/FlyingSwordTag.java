@@ -8,12 +8,15 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
+import slimeknights.mantle.client.TooltipKey;
 import slimeknights.tconstruct.library.modifiers.Modifier;
 import slimeknights.tconstruct.library.modifiers.ModifierEntry;
 import slimeknights.tconstruct.library.modifiers.ModifierHooks;
 import slimeknights.tconstruct.library.modifiers.hook.armor.EquipmentChangeModifierHook;
 import slimeknights.tconstruct.library.modifiers.hook.build.ModifierRemovalHook;
+import slimeknights.tconstruct.library.modifiers.hook.display.TooltipModifierHook;
 import slimeknights.tconstruct.library.modifiers.hook.interaction.InventoryTickModifierHook;
 import slimeknights.tconstruct.library.modifiers.impl.SingleLevelModifier;
 import slimeknights.tconstruct.library.module.ModuleHookMap;
@@ -21,10 +24,10 @@ import slimeknights.tconstruct.library.tools.context.EquipmentChangeContext;
 import slimeknights.tconstruct.library.tools.nbt.IToolStackView;
 
 import javax.annotation.Nullable;
+import java.util.List;
 
 public class FlyingSwordTag extends SingleLevelModifier implements
-        EquipmentChangeModifierHook, InventoryTickModifierHook, ModifierRemovalHook
-{
+        EquipmentChangeModifierHook, InventoryTickModifierHook, ModifierRemovalHook, TooltipModifierHook {
     // 此类为所有强化所共有，不要在这里加特指某个工具的数据
     // private FlyingSword flyingSwordEntity;
     // private UUID swordUUID;
@@ -35,7 +38,7 @@ public class FlyingSwordTag extends SingleLevelModifier implements
     public static final ResourceLocation PERSISTENT_SLOT = ResourceLocation.parse("flying-sword-slot");
 
     // 生成飞剑，一个工具对应的飞剑应当是唯一的
-    private String generateFlyingSword(IToolStackView tool, Level level, Player player, int itemSlot, ItemStack stack, @Nullable String uuid){
+    private static String generateFlyingSword(IToolStackView tool, Level level, Player player, int itemSlot, ItemStack stack, @Nullable String uuid){
         FlyingSword flyingSword = new FlyingSword(tool, level, player, itemSlot, stack);
 
         level.addFreshEntity(flyingSword);
@@ -49,7 +52,7 @@ public class FlyingSwordTag extends SingleLevelModifier implements
 
     @Override
     protected void registerHooks(ModuleHookMap.Builder hookBuilder) {
-        hookBuilder.addHook(this, ModifierHooks.EQUIPMENT_CHANGE, ModifierHooks.INVENTORY_TICK, ModifierHooks.REMOVE);
+        hookBuilder.addHook(this, ModifierHooks.EQUIPMENT_CHANGE, ModifierHooks.INVENTORY_TICK, ModifierHooks.REMOVE, ModifierHooks.TOOLTIP);
     }
 
     @Override
@@ -109,5 +112,10 @@ public class FlyingSwordTag extends SingleLevelModifier implements
         tool.getPersistentData().remove(PERSISTENT_UUID_KEY);
         tool.getPersistentData().remove(PERSISTENT_SLOT);
         return null;
+    }
+
+    @Override
+    public void addTooltip(IToolStackView tool, ModifierEntry modifier, @Nullable Player player, List<Component> tooltip, TooltipKey tooltipKey, TooltipFlag tooltipFlag) {
+
     }
 }
