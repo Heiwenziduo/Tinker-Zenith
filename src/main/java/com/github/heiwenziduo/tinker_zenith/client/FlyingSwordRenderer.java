@@ -32,9 +32,10 @@ import org.joml.Quaternionf;
 @OnlyIn(Dist.CLIENT)
 public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
     // 用于将工具手柄端点放在坐标原点 #并非所有工具贴图都能正确放置, 这里的参数对应原版的剑类
+    // 1/32 = 0.03125 但这里似乎不适合用其整数倍, 或为itemRender中已有某种缩放的缘故, 待查正//todo
     private static final double textureOffsetX = .203;
     private static final double textureOffsetY = .078;
-    private static final double textureOffsetY2 = .505 + textureOffsetY;
+    private static final double textureOffsetY2 = .491 + textureOffsetY;
 
     private final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(TinkerZenith.ModId, "");
     private final ItemRenderer itemRenderer;
@@ -48,6 +49,14 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
     @Override
     public void render(FlyingSword entity, float entityYaw, float partialTicks,
                        PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
+
+        FlyingSword.BEHAVIOR_MODE_LIST mode = entity.getBehaviorMode();
+        float xR;
+        xR = entity.getXRot();
+        float yawT = entity.tickCount % 360;
+        // 与面朝方向垂直
+        Vec3 xRotAx2 = new Vec3(0, 0, 1).yRot((float) Math.toRadians(entityYaw - 90));
+
         poseStack.pushPose();
 //
 //        // 平滑跟踪位置
@@ -99,44 +108,33 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
 //        model.renderToBuffer(poseStack, vertexConsumer, packedLight, OverlayTexture.NO_OVERLAY,
 //                1.0f, 1.0f, 1.0f, 1.0f);
 
-
         // 大概render在clientSide跑, flyingSword是服务端实体, 想要有材质得把stack从服务端同步过来. 见FlyingSword#defineSynchedData
-        // todo: 缩放、旋转、对齐、拖尾
-        float xR;
-        xR = entity.getXRot();
-//        poseStack.translate(0, .5, 0);
+        // todo: 拖尾
+        // todo: 发射抵达终点时, 柄朝玩家
+        // todo: 位于右侧的发射时左右翻转
+        // todo: 再转一轴, 当前仰视时有平移感
 
-        //poseStack.translate(2, 2, 0);
+
+        if (mode == FlyingSword.BEHAVIOR_MODE_LIST.LAUNCH || mode == FlyingSword.BEHAVIOR_MODE_LIST.RECOUP){
+            //System.out.println(xR);
+            Quaternionf q4 = new Quaternionf().setAngleAxis(Math.toRadians(-90 - xR), xRotAx2.x, xRotAx2.y, xRotAx2.z);
+            poseStack.mulPose(q4);
+        }
 
 
         //poseStack.mulPose(Axis.XP.rotationDegrees(entity.tickCount));
-        float yaw = entity.tickCount % 360;
-        Vec3 xRotAx = new Vec3(0, 0, 1).yRot((float) Math.toRadians(-yaw));
-        //Quaternionf q40 = new Quaternionf().setAngleAxis(90, xRotAx.x, xRotAx.y, xRotAx.z);
-        //Quaternionf q41 = new Quaternionf().setAngleAxis(Math.toRadians(yaw), 0, 1, 0); // 效果同y轴
-        //poseStack.mulPose(q40);
-        //poseStack.mulPose(Axis.YP.rotationDegrees(yaw));
 
-        poseStack.scale(3, 3, 3);
+        //Quaternionf q40 = new Quaternionf().setAngleAxis(90, xRotAx.x, xRotAx.y, xRotAx.z);
+        //poseStack.mulPose(q40);
+        //Quaternionf q41 = new Quaternionf().setAngleAxis(Math.toRadians(yaw), 0, 1, 0); // 效果同y轴
+
+
+
+        poseStack.mulPose(Axis.YP.rotationDegrees(entityYaw));
+        poseStack.scale(2, 2, 2);
         poseStack.translate(0, textureOffsetY2, 0);
         poseStack.mulPose(Axis.ZP.rotationDegrees(-135));
         poseStack.translate(textureOffsetX, textureOffsetY, 0); //将工具手柄对齐旋转原点
-//        CompoundTag tag = new CompoundTag();
-//        entity.saveWithoutId(tag);
-//        String rot = tag.getString("rot");
-//        if (rot.contains("x")){
-//            poseStack.mulPose(Axis.XP.rotationDegrees(entity.tickCount));
-//        }
-//        if (rot.contains("y")){
-//            poseStack.mulPose(Axis.YP.rotationDegrees(entity.tickCount));
-//        }
-//        if (rot.contains("z")){
-//            poseStack.mulPose(Axis.ZP.rotationDegrees(entity.tickCount));
-//        }
-
-        //poseStack.mulPose(Axis.XP.rotationDegrees(entity.tickCount));
-        //poseStack.mulPose(Axis.YP.rotationDegrees(entityYaw));
-        //poseStack.mulPose(Axis.ZP.rotationDegrees(-135));
 
         /*
          08/30 顺序有影响, 四元数究竟是怎样的原理?
@@ -146,6 +144,14 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
          上面的旋转轴在(0,0,0) (实体碰撞盒底部中心) 而下面的旋转轴在(2, 2, 0)
          poseStack.translate(2, 2, 0);
          poseStack.mulPose(Axis.YP.rotationDegrees(entity.tickCount));
+
+         //System.out.println(entity.position().toString());//可以获取
+
+         这一段可以让模型原地自转(y), 同时y=0上有一轴始终与模型正面保持垂直 (yawT = entity.tickCount)
+         Vec3 xRotAx = new Vec3(0, 0, 1).yRot((float) Math.toRadians(yawT - 90));
+         Quaternionf q42 = new Quaternionf().setAngleAxis(Math.toRadians(yawT), xRotAx.x, xRotAx.y, xRotAx.z);
+         poseStack.mulPose(q42);
+         poseStack.mulPose(Axis.YP.rotationDegrees(yawT));
         */
         ItemStack stack = entity.getItemStack();
         if(stack.isEmpty()){
