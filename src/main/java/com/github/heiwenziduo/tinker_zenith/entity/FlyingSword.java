@@ -28,8 +28,7 @@ import java.util.UUID;
 
 /**
  * 古希腊掌管射剑的神
- *
- * @important: 由flying_sword_tag里的决策，此实体只运行于服务端上，望周知
+ * #只运行于服务端
  */
 public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     // syncData
@@ -230,7 +229,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
 
         position0 = position();
         lookingAngle = master.getLookAngle();
-        if(lookingAngle.y == 1 || lookingAngle.y == -1 || behaviorMode != BEHAVIOR_MODE_LIST.RECOUP) return position0; // 避免抬头望天时缩成一团
+        if((lookingAngle.y == 1 || lookingAngle.y == -1) && behaviorMode != BEHAVIOR_MODE_LIST.RECOUP) return position0; // 避免抬头望天时缩成一团
 
         slotCoefficient = Math.ceil((double) slotNumber /2);
         horizontalOffset = Math.pow(-1, slotNumber) * slotCoefficient * displayDensity;
@@ -406,7 +405,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     /** 将数据长久保存到存档 */
     @Override
     protected void addAdditionalSaveData(CompoundTag pCompound) {
-        pCompound.putString(MASTER_UUID, masterUUID);
+        if(masterUUID != null) pCompound.putString(MASTER_UUID, masterUUID);
         pCompound.putInt(SLOT_NUMBER, slotNumber);
     }
 

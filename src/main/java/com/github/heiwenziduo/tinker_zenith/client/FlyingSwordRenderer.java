@@ -9,15 +9,33 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import org.joml.Quaternionf;
 
+
+/**
+ * <h3>references:</h3>
+ * <ul>
+ *     <li>{@link net.minecraft.client.renderer.entity.ItemFrameRenderer} {@link net.minecraft.client.renderer.entity.FoxRenderer} 物品渲染参考</li>
+ *     <li><a href="https://learnopengl.com/Getting-started/Transformations">@OpenGL</a> 矩阵变换</li>
+ *     <li><a href="https://github.com/Krasjet/quaternion">@Github</a> 四元数</li>
+ * </ul>
+ * <p>"It is advised to first do scaling operations, then rotations and lastly translations when combining matrices otherwise they may (negatively) affect each other."<p/>
+ */
 @OnlyIn(Dist.CLIENT)
 public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
+    // 用于将工具手柄端点放在坐标原点 #并非所有工具贴图都能正确放置, 这里的参数对应原版的剑类
+    private static final double textureOffsetX = .203;
+    private static final double textureOffsetY = .078;
+    private static final double textureOffsetY2 = .505 + textureOffsetY;
+
     private final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(TinkerZenith.ModId, "");
     private final ItemRenderer itemRenderer;
 
@@ -81,23 +99,57 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
 //        model.renderToBuffer(poseStack, vertexConsumer, packedLight, OverlayTexture.NO_OVERLAY,
 //                1.0f, 1.0f, 1.0f, 1.0f);
 
-        /// 参考: package net.minecraft.world.entity.decoration.ItemFrame;
-        /// 四元数: [@Github] https://github.com/Krasjet/quaternion
-        /// 大概render在clientSide跑, flyingSword是服务端实体, 想要有材质得把stack从服务端同步过来. 见FlyingSword#defineSynchedData
 
+        // 大概render在clientSide跑, flyingSword是服务端实体, 想要有材质得把stack从服务端同步过来. 见FlyingSword#defineSynchedData
         // todo: 缩放、旋转、对齐、拖尾
         float xR;
         xR = entity.getXRot();
-        poseStack.translate(0, .5, 0);
-        poseStack.scale(2, 2, 2);
+//        poseStack.translate(0, .5, 0);
 
-        // 08/30 顺序有影响, 四元数究竟是怎样的原理?
-        poseStack.mulPose(Axis.YP.rotationDegrees(entityYaw));
+        //poseStack.translate(2, 2, 0);
+
+
+        //poseStack.mulPose(Axis.XP.rotationDegrees(entity.tickCount));
+        float yaw = entity.tickCount % 360;
+        Vec3 xRotAx = new Vec3(0, 0, 1).yRot((float) Math.toRadians(-yaw));
+        //Quaternionf q40 = new Quaternionf().setAngleAxis(90, xRotAx.x, xRotAx.y, xRotAx.z);
+        //Quaternionf q41 = new Quaternionf().setAngleAxis(Math.toRadians(yaw), 0, 1, 0); // 效果同y轴
+        //poseStack.mulPose(q40);
+        //poseStack.mulPose(Axis.YP.rotationDegrees(yaw));
+
+        poseStack.scale(3, 3, 3);
+        poseStack.translate(0, textureOffsetY2, 0);
         poseStack.mulPose(Axis.ZP.rotationDegrees(-135));
+        poseStack.translate(textureOffsetX, textureOffsetY, 0); //将工具手柄对齐旋转原点
+//        CompoundTag tag = new CompoundTag();
+//        entity.saveWithoutId(tag);
+//        String rot = tag.getString("rot");
+//        if (rot.contains("x")){
+//            poseStack.mulPose(Axis.XP.rotationDegrees(entity.tickCount));
+//        }
+//        if (rot.contains("y")){
+//            poseStack.mulPose(Axis.YP.rotationDegrees(entity.tickCount));
+//        }
+//        if (rot.contains("z")){
+//            poseStack.mulPose(Axis.ZP.rotationDegrees(entity.tickCount));
+//        }
 
+        //poseStack.mulPose(Axis.XP.rotationDegrees(entity.tickCount));
+        //poseStack.mulPose(Axis.YP.rotationDegrees(entityYaw));
+        //poseStack.mulPose(Axis.ZP.rotationDegrees(-135));
+
+        /*
+         08/30 顺序有影响, 四元数究竟是怎样的原理?
+         08/31 似乎是倒着向前读的:
+         poseStack.mulPose(Axis.YP.rotationDegrees(entity.tickCount));
+         poseStack.translate(2, 2, 0);
+         上面的旋转轴在(0,0,0) (实体碰撞盒底部中心) 而下面的旋转轴在(2, 2, 0)
+         poseStack.translate(2, 2, 0);
+         poseStack.mulPose(Axis.YP.rotationDegrees(entity.tickCount));
+        */
         ItemStack stack = entity.getItemStack();
         if(stack.isEmpty()){
-            stack = new ItemStack(Items.PORKCHOP);
+            stack = new ItemStack(Items.DIAMOND_SWORD);
         }
         itemRenderer.renderStatic(
                 stack,
@@ -110,7 +162,6 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
                 entity.getId());
 
         poseStack.popPose();
-
         super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
     }
 
