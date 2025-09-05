@@ -9,7 +9,6 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
@@ -50,12 +49,12 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
     public void render(FlyingSword entity, float entityYaw, float partialTicks,
                        PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
 
+        ItemStack stack = entity.getItemStack();
         FlyingSword.BEHAVIOR_MODE_LIST mode = entity.getBehaviorMode();
-        float xR;
-        xR = entity.getXRot();
-        float yawT = entity.tickCount % 360;
-        // 与面朝方向垂直
-        Vec3 xRotAx2 = new Vec3(0, 0, 1).yRot((float) Math.toRadians(entityYaw - 90));
+        int slotNumber = entity.getSlotNumber();
+        float lunchPitch = entity.getLunchPitch();
+        float xRot;
+        xRot = entity.getXRot();
 
         poseStack.pushPose();
 //
@@ -116,9 +115,18 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
 
 
         if (mode == FlyingSword.BEHAVIOR_MODE_LIST.LAUNCH || mode == FlyingSword.BEHAVIOR_MODE_LIST.RECOUP){
-            //System.out.println(xR);
-            Quaternionf q4 = new Quaternionf().setAngleAxis(Math.toRadians(-90 - xR), xRotAx2.x, xRotAx2.y, xRotAx2.z);
+            //System.out.println(xRot);
+            // 与面朝方向相同, 将刀身旋转仰角 = 视角
+            Vec3 rotToVision = new Vec3(0, 0, 1).yRot((float) Math.toRadians(entityYaw)); //todo转轴不对
+            Quaternionf q41 = new Quaternionf().setAngleAxis(lunchPitch, rotToVision.x, rotToVision.y, rotToVision.z);
+            poseStack.mulPose(q41);
+
+            // 与面朝方向垂直, 将刀柄转向面朝点
+            Vec3 rotToFlat = new Vec3(0, 0, 1).yRot((float) Math.toRadians(entityYaw - 90));
+            Quaternionf q4 = new Quaternionf().setAngleAxis(Math.toRadians(-90 - xRot), rotToFlat.x, rotToFlat.y, rotToFlat.z);
             poseStack.mulPose(q4);
+
+            poseStack.mulPose(Axis.YP.rotationDegrees(180));
         }
 
 
@@ -128,8 +136,10 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
         //poseStack.mulPose(q40);
         //Quaternionf q41 = new Quaternionf().setAngleAxis(Math.toRadians(yaw), 0, 1, 0); // 效果同y轴
 
+        System.out.println("Yaw:"+entityYaw+"\nYRot:"+entity.getYRot());
 
 
+        if(slotNumber % 2 == 0) poseStack.mulPose(Axis.YP.rotationDegrees(180)); // 将右侧武器刀口朝外
         poseStack.mulPose(Axis.YP.rotationDegrees(entityYaw));
         poseStack.scale(2, 2, 2);
         poseStack.translate(0, textureOffsetY2, 0);
@@ -153,20 +163,20 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
          poseStack.mulPose(q42);
          poseStack.mulPose(Axis.YP.rotationDegrees(yawT));
         */
-        ItemStack stack = entity.getItemStack();
         if(stack.isEmpty()){
             stack = new ItemStack(Items.DIAMOND_SWORD);
         }
         itemRenderer.renderStatic(
                 stack,
                 ItemDisplayContext.GROUND,
-                packedLight,
+                15728640,
                 OverlayTexture.NO_OVERLAY,
                 poseStack,
                 buffer,
                 entity.level(),
                 entity.getId());
 
+        //System.out.println(packedLight); // 15728640 日光下
         poseStack.popPose();
         super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
     }

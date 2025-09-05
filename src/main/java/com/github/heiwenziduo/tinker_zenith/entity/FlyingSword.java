@@ -33,9 +33,10 @@ import java.util.UUID;
 public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     // syncData
     // private static final EntityDataAccessor<String> DATA_MASTER_UUID = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.STRING);
-    // private static final EntityDataAccessor<Integer> DATA_SLOT_NUMBER = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_SLOT_NUMBER = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<String> DATA_BEHAVIOR_MODE = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<ItemStack> DATA_ITEM_STACK = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.ITEM_STACK);
+    private static final EntityDataAccessor<Float> DATA_LUNCH_PITCH = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.FLOAT);
     private static final String MASTER_UUID = "MasterUUID";
     private static final String SLOT_NUMBER = "SlotNumber";
     // private static final String BEHAVIOR_MODE = "BehaviorMode";
@@ -46,7 +47,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     public static final int maxLifetime = 40;
     private static final double displayDensity = .3; // 排列密度
     private static final int maxLunchCooldown = 10; // 这也是魔法数, 设计上应当9剑都存在时可以无缝交替发射, 参考九剑词条中的魔法数
-    private static final int windowOfAttackTick = 8; // 决定了剑会多久抵达目标点
+    private static final int windowOfAttackTick = 48; // 决定了剑会多久抵达目标点
     public enum BEHAVIOR_MODE_LIST{
         IDLE("IDLE"),
         LAUNCH("LAUNCH"),
@@ -58,7 +59,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
 
         public static BEHAVIOR_MODE_LIST fromString(String str) {
             for(var s : values()){
-                if (s.text == str) return s;
+                if (Objects.equals(s.text, str)) return s;
             }
             return IDLE;
         }
@@ -72,21 +73,21 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     private ItemStack itemStack;
     private int slotNumber;
     private int lifeTime = maxLifetime;
+    private boolean isAboutToDiscard = false;
     private int lunchCooldown = 0;
     private int lunchTickRemaining = 0;
     private int recoupTickRemaining = 0;
-    private boolean isAboutToDiscard = false;
-    @Deprecated
-    private final int generalFlyingSpeed = 2; // we use "windowOfAttackTick" instead
     private Vec3 lunchInitPosition;
     private Vec3 lunchModeTarget;
     private float lunchPitchRadius;
     private float lunchYawRadius;
     private float lunchVerticalRandom;
-    /** 短轴 */
+    /// 短轴
     private double lunchEllipseShort;
-    /** 长轴 */
+    /// 长轴
     private double lunchEllipseMajor;
+    private float yawMemory = 0;
+    private float lastYRot = 0;
 
 
     public FlyingSword(EntityType<FlyingSword> pEntityType, Level pLevel) {
@@ -257,10 +258,10 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     }
 
     private void LunchingMode() {
-        // todo: 给模型添加旋转
-        lunchTickRemaining--;
-        if(lunchTickRemaining>=0){
-
+        //todo 发射终点椭圆轨迹缺一块
+        if(lunchTickRemaining>0){
+            lunchTickRemaining--;
+            calculateLunchPitch(lunchModeTarget);
             // 写一个简单的椭球, 定义长半轴为a, 两个短半轴均为b
             // pitch, yaw 两变量可参考此文
             // https://www.jianshu.com/p/a824e3cc4573
@@ -277,15 +278,17 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
             x = leftOrRight * Math.sqrt(Math.abs(tmp));
 
             // 调整朝向, 指向椭圆z轴
-            Vec3 posToFace = new Vec3(0, 0, z).zRot(-1 * leftOrRight * lunchVerticalRandom).xRot(lunchPitchRadius).yRot(lunchYawRadius);
+            //Vec3 posToFace = new Vec3(0, 0, z).zRot(-1 * leftOrRight * lunchVerticalRandom).xRot(lunchPitchRadius).yRot(lunchYawRadius);
+            Vec3 posToFace = new Vec3(0, 0, lunchEllipseMajor / 2.5)
+                    .zRot(-1 * leftOrRight * lunchVerticalRandom).xRot(lunchPitchRadius).yRot(lunchYawRadius);
             facePoint(lunchInitPosition.add(posToFace));
 
             // 产生一道指向posToFace的粒子线, 测试用
-//            Vec3 pPo = position().vectorTo(lunchInitPosition.add(posToFace));
-//            for (int i=0;i<20;i++){
-//                Vec3 pPo2 = pPo.scale((double) i /20).add(position());
-//                ((ServerLevel)level()).sendParticles(ParticleTypes.WAX_OFF, pPo2.x, pPo2.y, pPo2.z, 1,0,0,0,0);
-//            }
+            Vec3 pPo = position().vectorTo(lunchInitPosition.add(posToFace));
+            for (int i=0;i<20;i++){
+                Vec3 pPo2 = pPo.scale((double) i /20).add(position());
+                ((ServerLevel)level()).sendParticles(ParticleTypes.WAX_OFF, pPo2.x, pPo2.y, pPo2.z, 1,0,0,0,0);
+            }
 
 
             // 角度稍稍错开让轨迹不那么单调
@@ -328,8 +331,9 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     }
 
     private void RecoupingMode() {
-        recoupTickRemaining--;
-        if(recoupTickRemaining>=0){
+        if(recoupTickRemaining>0){
+            recoupTickRemaining--;
+            calculateLunchPitch(master.position());
             // 同发射时相同, 不过这边椭圆随玩家位置动态更新
             double a, b, x, z, tmp, longAxis, dYaw, dPitch;
             Vec3 deltaV;
@@ -349,7 +353,9 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
             float leftOrRight = (float) Math.pow(-1, slotNumber);
             x = leftOrRight * Math.sqrt(Math.abs(tmp));
 
-            Vec3 posToFace = new Vec3(0, 0, z).zRot(leftOrRight * lunchVerticalRandom).xRot((float) dPitch).yRot((float) dYaw);
+            //Vec3 posToFace = new Vec3(0, 0, z).zRot(leftOrRight * lunchVerticalRandom).xRot((float) dPitch).yRot((float) dYaw);
+            Vec3 posToFace = new Vec3(0, 0, longAxis / 2.5)
+                    .zRot(leftOrRight * lunchVerticalRandom).xRot((float) dPitch).yRot((float) dYaw);
             facePoint(lunchModeTarget.add(posToFace));
             // 随机z角同发射时角度一致, 方向相反
             Vec3 posEllipse = new Vec3(x,0,z).zRot(leftOrRight * lunchVerticalRandom).xRot((float) dPitch).yRot((float) dYaw);
@@ -372,15 +378,33 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         double d1 = target.y - sword.y;
         double d2 = target.z - sword.z;
         double d3 = Math.sqrt(d0 * d0 + d2 * d2);
-        // setXRot(Mth.wrapDegrees((float)(-(Mth.atan2(d1, d3) * (double)(180F / (float)Math.PI)))));
-        // setYRot(Mth.wrapDegrees((float)(Mth.atan2(d2, d0) * (double)(180F / (float)Math.PI)) - 90.0F));
         setXRot((float) (-Math.atan2(d1, d3) * (180 / Math.PI)));
 
+//        float yawMemory, lastYRot, curYRot;
+//        if(Math.abs(curYRot - lastYRot) >= 180){
+//            yawMemory = yawMemory % 360 + curYRot + (curYRot - lastYRot) > 0 ? 360 : -360;
+//        }
+        float curYRot = (float) (Math.atan2(d0, d2) * (180 / Math.PI));
+        float angleDelta = curYRot - lastYRot;
+        if (Math.abs(angleDelta) >= 180) {
+            yawMemory += angleDelta > 0 ? -360 : 360;
+            System.out.println(angleDelta);
+        }
+        lastYRot = curYRot;
         //todo 在z轴方向有坏点, 旋转会跳一下
-        //setYRot(Mth.wrapDegrees((float) (Math.atan2(d0, d2) * (double)(180F / (float)Math.PI))));
-        setYRot((float) (Math.atan2(d0, d2) * (180 / Math.PI)));
+        setYRot(yawMemory + curYRot);
         xRotO = getXRot();
         yRotO = getYRot();
+    }
+
+    private void calculateLunchPitch(Vec3 target) {
+        // 用于向render函数传递仰角
+        Vec3 deltaV = position().vectorTo(target);
+        double x, z;
+        x = deltaV.x;
+        z = deltaV.z;
+        float pitch = (float) Math.atan2(deltaV.y, Math.sqrt(x * x + z * z));
+        setLunchPitch(pitch);
     }
 
     /** 获取就绪状态 */
@@ -400,9 +424,10 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     protected void defineSynchedData() {
         entityData.define(DATA_ITEM_STACK, ItemStack.EMPTY);
         entityData.define(DATA_BEHAVIOR_MODE, BEHAVIOR_MODE_LIST.IDLE.text);
+        entityData.define(DATA_SLOT_NUMBER, 0);
+        entityData.define(DATA_LUNCH_PITCH, 0f);
         //改用生成时一次性同步的数据，因为masterUUID不会改变
         //entityData.define(DATA_MASTER_UUID, "");
-        //entityData.define(DATA_SLOT_NUMBER, 0);
     }
 
     /** 实体生成时与服务器同步一次，随后撒手 */
@@ -472,7 +497,12 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     }
 
     public int getSlotNumber() {
-        return slotNumber;
+        return getEntityData().get(DATA_SLOT_NUMBER);
+    }
+
+    /// 所传为弧度
+    public float getLunchPitch() {
+        return getEntityData().get(DATA_LUNCH_PITCH);
     }
 
     @Nullable
@@ -493,7 +523,10 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     }
     private void setSlotNumber(int slot) {
         slotNumber = slot;
-        //entityData.set(DATA_SLOT_NUMBER, slot);
+        entityData.set(DATA_SLOT_NUMBER, slot);
+    }
+    private void setLunchPitch(float pitch) {
+        entityData.set(DATA_LUNCH_PITCH, pitch);
     }
     /** @param mode: 0--IDLE; 1--LUNCH; 2--RECOUP */
     private void setBehaviorMode(BEHAVIOR_MODE_LIST mode) {
