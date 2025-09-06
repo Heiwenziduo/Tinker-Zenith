@@ -1,5 +1,6 @@
 package com.github.heiwenziduo.tinker_zenith.entity;
 
+import com.github.heiwenziduo.tinker_zenith.api.FlyingSwordCollideCallback;
 import com.github.heiwenziduo.tinker_zenith.initializer.InitEntity;
 import com.github.heiwenziduo.tinker_zenith.utility.Abbr;
 import com.mojang.logging.LogUtils;
@@ -14,15 +15,17 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.entity.IEntityAdditionalSpawnData;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
-import slimeknights.tconstruct.library.tools.nbt.IToolStackView;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -47,7 +50,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     public static final int maxLifetime = 40;
     private static final double displayDensity = .3; // 排列密度
     private static final int maxLunchCooldown = 10; // 这也是魔法数, 设计上应当9剑都存在时可以无缝交替发射, 参考九剑词条中的魔法数
-    private static final int windowOfAttackTick = 48; // 决定了剑会多久抵达目标点
+    private static final int windowOfAttackTick = 8; // 决定了剑会多久抵达目标点
     public enum BEHAVIOR_MODE_LIST{
         IDLE("IDLE"),
         LAUNCH("LAUNCH"),
@@ -64,6 +67,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
             return IDLE;
         }
     }
+    private FlyingSwordCollideCallback callback;
 
     // normalAttributes
     public boolean noPhysics = true;
@@ -88,18 +92,20 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     private double lunchEllipseMajor;
     private float yawMemory = 0;
     private float lastYRot = 0;
+    private String[] attackedList;
 
 
     public FlyingSword(EntityType<FlyingSword> pEntityType, Level pLevel) {
         super(pEntityType, pLevel);
     }
-    public FlyingSword(IToolStackView tool, Level pLevel, Player player, int slot, ItemStack stack){
+    public FlyingSword(Level pLevel, Player player, int slot, ItemStack stack, @Nullable FlyingSwordCollideCallback lambda){
         this(InitEntity.FLYING_SWORD.get(), pLevel);
 
         setMasterUUID(player.getUUID().toString());
         setSlotNumber(slot);
         setItemStack(stack);
 
+        callback = lambda;
         master = player;
         setPos(master.position().add(0,2,0));
         generateSmokeParticle();
@@ -152,6 +158,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         } else {
             // recoup
             RecoupingMode();
+            checkHitBoxCollide();
         }
     }
 
@@ -307,6 +314,13 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     private boolean checkHitBoxCollide() {
         // todo 引用玩家攻击 参: @sakuraTinker 工匠箭矢
         // 碰撞和实体交互
+        AABB aabb = AABB.ofSize(position(), 1, 1, 1);
+        List<? extends Entity> entitiesList = level().getEntities(this, aabb,
+                entity -> entity instanceof LivingEntity && entity.isPickable() && entity.isAlive());
+        for(var targetEntity : entitiesList){
+            if(targetEntity == master) continue;
+            if(callback != null) callback.onCollide(targetEntity);
+        }
         return false;
     }
 

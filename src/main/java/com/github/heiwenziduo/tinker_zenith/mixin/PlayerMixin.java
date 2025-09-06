@@ -1,7 +1,7 @@
 package com.github.heiwenziduo.tinker_zenith.mixin;
 
-import com.github.heiwenziduo.tinker_zenith.api.FlyingSwordManager;
-import com.github.heiwenziduo.tinker_zenith.api.PlayerMixinAPI;
+import com.github.heiwenziduo.tinker_zenith.api.mixin.FlyingSwordManager;
+import com.github.heiwenziduo.tinker_zenith.api.mixin.PlayerMixinAPI;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;

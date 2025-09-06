@@ -1,9 +1,12 @@
 package com.github.heiwenziduo.tinker_zenith.tag;
 
+import com.github.heiwenziduo.tinker_zenith.api.FlyingSwordCollideCallback;
 import com.github.heiwenziduo.tinker_zenith.entity.FlyingSword;
 import com.github.heiwenziduo.tinker_zenith.utility.Abbr;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -21,6 +24,7 @@ import slimeknights.tconstruct.library.modifiers.hook.interaction.InventoryTickM
 import slimeknights.tconstruct.library.modifiers.impl.SingleLevelModifier;
 import slimeknights.tconstruct.library.module.ModuleHookMap;
 import slimeknights.tconstruct.library.tools.context.EquipmentChangeContext;
+import slimeknights.tconstruct.library.tools.helper.ToolAttackUtil;
 import slimeknights.tconstruct.library.tools.nbt.IToolStackView;
 
 import javax.annotation.Nullable;
@@ -37,12 +41,20 @@ public class FlyingSwordTag extends SingleLevelModifier implements
     public static final ResourceLocation PERSISTENT_UUID_KEY = ResourceLocation.parse("flying-sword-uuid-key");
     public static final ResourceLocation PERSISTENT_SLOT = ResourceLocation.parse("flying-sword-slot");
 
-    // 生成飞剑，一个工具对应的飞剑应当是唯一的
+    /// 生成飞剑，一个工具对应的飞剑应当是唯一的
     private static String generateFlyingSword(IToolStackView tool, Level level, Player player, int itemSlot, ItemStack stack, @Nullable String uuid){
-        FlyingSword flyingSword = new FlyingSword(tool, level, player, itemSlot, stack);
+        FlyingSwordCollideCallback onFlyingSwordCollide = (targetEntity) -> {
+            System.out.println(targetEntity);
+            targetEntity.invulnerableTime = 0;
+            //todo: 用快捷栏工具攻击
+            ToolAttackUtil.attackEntity(tool, player, InteractionHand.OFF_HAND, targetEntity,
+                    ToolAttackUtil.getCooldownFunction(player, InteractionHand.OFF_HAND), false, EquipmentSlot.MAINHAND);
+
+            //targetEntity.hurt(level.damageSources().explosion(player, player), 1);
+        };
+        FlyingSword flyingSword = new FlyingSword(level, player, itemSlot, stack, onFlyingSwordCollide);
 
         level.addFreshEntity(flyingSword);
-        // DeBug.Console(player, "生成飞剑: isClientSide = "+level.isClientSide+ itemSlot+"号\n"+stack.toString());
         return flyingSword.getStringUUID();
     }
 
@@ -56,18 +68,9 @@ public class FlyingSwordTag extends SingleLevelModifier implements
     }
 
     @Override
-    public void onEquip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
-//        degenerateFlyingSword(tool, context);
-    }
-
-    @Override
-    public void onUnequip(IToolStackView tool, ModifierEntry modifier, EquipmentChangeContext context) {
-//        generateFlyingSword(tool, context);
-    }
-
-    @Override
     public void onInventoryTick(IToolStackView tool, ModifierEntry modifier, Level level, LivingEntity holder, int itemSlot, boolean isSelected, boolean isCorrectSlot, ItemStack stack) {
         if(!(holder instanceof Player player)) return;
+        //stack = stack.copy();
         // todo: 处理位于副手的情况 08/21
         // if(itemSlot==0 && player.getOffhandItem().equals(tool)) return;
 

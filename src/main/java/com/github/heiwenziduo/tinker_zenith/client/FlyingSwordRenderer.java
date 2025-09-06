@@ -4,6 +4,7 @@ import com.github.heiwenziduo.tinker_zenith.TinkerZenith;
 import com.github.heiwenziduo.tinker_zenith.entity.FlyingSword;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
@@ -52,7 +53,10 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
     @Override
     public void render(FlyingSword entity, float entityYaw, float partialTicks,
                        PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
-
+        //=================== test
+//        var minecraft = Minecraft.getInstance();
+//        minecraft.getEntityRenderDispatcher().cameraOrientation();
+        //===================
         Level level = entity.level();
         ItemStack stack = entity.getItemStack();
         FlyingSword.BEHAVIOR_MODE_LIST mode = entity.getBehaviorMode();
@@ -60,22 +64,19 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
         float lunchPitch = entity.getLunchPitch();
         float xRot = entity.getXRot();
         Quaternionf faceYaw = new Quaternionf().setAngleAxis(Math.toRadians(entityYaw), 0, 1, 0);
-        //todo: z正方向处坏点:
-        //System.out.println("Yaw:"+entityYaw+"\nYRot:"+entity.getYRot());
-
-        // 大概render在clientSide跑, flyingSword是服务端实体, 想要有材质得把stack从服务端同步过来. 见FlyingSword#defineSynchedData
+        // todo: z正方向处坏点:
         // todo: 拖尾
         // todo: 发射抵达终点时, 柄朝玩家
 
         poseStack.pushPose();
         if (mode == FlyingSword.BEHAVIOR_MODE_LIST.LAUNCH || mode == FlyingSword.BEHAVIOR_MODE_LIST.RECOUP){
-            System.out.println("Pitch:"+lunchPitch * 360/PI+"\nXRot:"+xRot);
+            //System.out.println("Pitch:"+lunchPitch * 360/PI+"\nXRot:"+xRot);
             // 与面朝方向相同, 将刀身旋转仰角 = 视角
             Vec3 rotToVision = new Vec3(0, 0, 1).yRot((float) Math.toRadians(entityYaw)).xRot((float) Math.toRadians(xRot));
-            for (int i=0; i<10; i++){
-                Vec3 position = entity.position().add(rotToVision.scale((double) i / 8));
-                level.addParticle(ParticleTypes.WAX_OFF, position.x, position.y, position.z, 0, 0, 0);
-            }
+//            for (int i=0; i<10; i++){
+//                Vec3 position = entity.position().add(rotToVision.scale((double) i / 8));
+//                level.addParticle(ParticleTypes.WAX_OFF, position.x, position.y, position.z, 0, 0, 0);
+//            }
             //todo 转角还不对
             Quaternionf q41 = new Quaternionf().setAngleAxis(lunchPitch, rotToVision.x, rotToVision.y, rotToVision.z);
             poseStack.mulPose(q41);
@@ -113,6 +114,7 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
          poseStack.mulPose(Axis.YP.rotationDegrees(yawT));
         */
         if(stack.isEmpty()){
+            // 大概render在clientSide跑, flyingSword是服务端实体, 想要有材质得把stack从服务端同步过来. 见FlyingSword#defineSynchedData
             stack = new ItemStack(Items.DIAMOND_SWORD);
         }
         itemRenderer.renderStatic(

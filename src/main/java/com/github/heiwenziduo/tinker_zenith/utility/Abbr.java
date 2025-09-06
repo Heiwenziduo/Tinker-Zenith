@@ -1,6 +1,6 @@
 package com.github.heiwenziduo.tinker_zenith.utility;
 
-import com.github.heiwenziduo.tinker_zenith.api.PlayerMixinAPI;
+import com.github.heiwenziduo.tinker_zenith.api.mixin.PlayerMixinAPI;
 import com.github.heiwenziduo.tinker_zenith.entity.FlyingSword;
 import net.minecraft.world.entity.player.Player;
 import org.jetbrains.annotations.Nullable;

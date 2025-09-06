@@ -2,13 +2,19 @@ package com.github.heiwenziduo.tinker_zenith.tag;
 
 import com.github.heiwenziduo.tinker_zenith.entity.FlyingSword;
 import com.github.heiwenziduo.tinker_zenith.utility.Abbr;
+import com.github.heiwenziduo.tinker_zenith.utility.HitBoxUtility;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import slimeknights.tconstruct.library.modifiers.ModifierEntry;
 import slimeknights.tconstruct.library.modifiers.ModifierHooks;
+import slimeknights.tconstruct.library.modifiers.hook.interaction.GeneralInteractionModifierHook;
+import slimeknights.tconstruct.library.modifiers.hook.interaction.InteractionSource;
 import slimeknights.tconstruct.library.modifiers.hook.interaction.InventoryTickModifierHook;
 import slimeknights.tconstruct.library.modifiers.hook.interaction.UsingToolModifierHook;
 import slimeknights.tconstruct.library.modifiers.impl.SingleLevelModifier;
@@ -16,14 +22,23 @@ import slimeknights.tconstruct.library.module.ModuleHookMap;
 import slimeknights.tconstruct.library.tools.nbt.IToolStackView;
 
 
-public class NineSwordTag extends SingleLevelModifier implements UsingToolModifierHook, InventoryTickModifierHook {
+public class NineSwordTag extends SingleLevelModifier implements InventoryTickModifierHook, GeneralInteractionModifierHook {
     @Override
     protected void registerHooks(ModuleHookMap.Builder hookBuilder) {
-        hookBuilder.addHook(this, ModifierHooks.TOOL_USING, ModifierHooks.INVENTORY_TICK);
+        hookBuilder.addHook(this, ModifierHooks.INVENTORY_TICK, ModifierHooks.GENERAL_INTERACT);
     }
 
     @Override
-    public void onUsingTick(IToolStackView tool, ModifierEntry modifier, LivingEntity entity, int useDuration, int timeLeft, ModifierEntry activeModifier) {
+    public InteractionResult onToolUse(IToolStackView tool, ModifierEntry modifier, Player player, InteractionHand hand, InteractionSource source) {
+        if (source == InteractionSource.RIGHT_CLICK && !tool.isBroken()) {
+            GeneralInteractionModifierHook.startUsing(tool, modifier.getId(), player, hand);
+            return InteractionResult.CONSUME;
+        }
+        return InteractionResult.PASS;
+    }
+
+    @Override
+    public void onUsingTick(IToolStackView tool, ModifierEntry modifier, LivingEntity entity, int timeLeft) {
         if(!(entity instanceof Player player)) return;
         Level level = player.level();
 
@@ -35,7 +50,7 @@ public class NineSwordTag extends SingleLevelModifier implements UsingToolModifi
             for (int i=0; i<9; i++){
                 FlyingSword sword = Abbr.getSword(player, i);
                 if(sword != null){
-                    Vec3 target = player.position().add(player.getLookAngle().scale(10));
+                    Vec3 target = HitBoxUtility.findVisionPosition(player);
                     boolean lunched = sword.triggerLunch(target, player.getViewXRot(1), player.getViewYRot(1));
                     if(lunched) break;
                 }
@@ -47,9 +62,20 @@ public class NineSwordTag extends SingleLevelModifier implements UsingToolModifi
     }
 
     @Override
+    public UseAnim getUseAction(IToolStackView tool, ModifierEntry modifier) {
+        return UseAnim.BOW;
+    }
+
+    @Override
+    public int getUseDuration(IToolStackView tool, ModifierEntry modifier) {
+        return 72000;
+    }
+
+    @Override
     public void onInventoryTick(IToolStackView tool, ModifierEntry modifier, Level world, LivingEntity holder, int itemSlot, boolean isSelected, boolean isCorrectSlot, ItemStack stack) {
         if(!isSelected) return;
         if(!(holder instanceof Player player)) return;
         // player.hold
     }
+
 }

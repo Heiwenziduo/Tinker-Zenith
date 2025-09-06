@@ -1,4 +1,4 @@
-package com.github.heiwenziduo.tinker_zenith.api;
+package com.github.heiwenziduo.tinker_zenith.api.mixin;
 
 import com.github.heiwenziduo.tinker_zenith.entity.FlyingSword;
 import org.jetbrains.annotations.Nullable;
