@@ -242,6 +242,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
 
         position0 = position();
         lookingAngle = master.getLookAngle();
+        //todo bug: +-90°时剑不跟随
         if((lookingAngle.y == 1 || lookingAngle.y == -1) && behaviorMode != BEHAVIOR_MODE_LIST.RECOUP) return position0; // 避免抬头望天时缩成一团
 
         slotCoefficient = Math.ceil((double) slotNumber /2);
@@ -258,7 +259,6 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     }
 
     private void LunchingMode() {
-        //todo 发射终点椭圆轨迹缺一块
         if(lunchTickRemaining>0){
             lunchTickRemaining--;
             calculateLunchPitch(lunchModeTarget);
@@ -278,17 +278,17 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
             x = leftOrRight * Math.sqrt(Math.abs(tmp));
 
             // 调整朝向, 指向椭圆z轴
-            //Vec3 posToFace = new Vec3(0, 0, z).zRot(-1 * leftOrRight * lunchVerticalRandom).xRot(lunchPitchRadius).yRot(lunchYawRadius);
             Vec3 posToFace = new Vec3(0, 0, lunchEllipseMajor / 2.5)
                     .zRot(-1 * leftOrRight * lunchVerticalRandom).xRot(lunchPitchRadius).yRot(lunchYawRadius);
             facePoint(lunchInitPosition.add(posToFace));
 
-            // 产生一道指向posToFace的粒子线, 测试用
-            Vec3 pPo = position().vectorTo(lunchInitPosition.add(posToFace));
-            for (int i=0;i<20;i++){
-                Vec3 pPo2 = pPo.scale((double) i /20).add(position());
-                ((ServerLevel)level()).sendParticles(ParticleTypes.WAX_OFF, pPo2.x, pPo2.y, pPo2.z, 1,0,0,0,0);
-            }
+            //todo 发射终点椭圆轨迹缺一块
+            //产生一道指向posToFace的粒子线, 测试用
+//            Vec3 pPo = position().vectorTo(lunchInitPosition.add(posToFace));
+//            for (int i=0;i<20;i++){
+//                Vec3 pPo2 = pPo.scale((double) i /20).add(position());
+//                ((ServerLevel)level()).sendParticles(ParticleTypes.WAX_OFF, pPo2.x, pPo2.y, pPo2.z, 1,0,0,0,0);
+//            }
 
 
             // 角度稍稍错开让轨迹不那么单调
@@ -333,7 +333,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     private void RecoupingMode() {
         if(recoupTickRemaining>0){
             recoupTickRemaining--;
-            calculateLunchPitch(master.position());
+            calculateLunchPitch(master.position(), lunchModeTarget);
             // 同发射时相同, 不过这边椭圆随玩家位置动态更新
             double a, b, x, z, tmp, longAxis, dYaw, dPitch;
             Vec3 deltaV;
@@ -353,7 +353,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
             float leftOrRight = (float) Math.pow(-1, slotNumber);
             x = leftOrRight * Math.sqrt(Math.abs(tmp));
 
-            //Vec3 posToFace = new Vec3(0, 0, z).zRot(leftOrRight * lunchVerticalRandom).xRot((float) dPitch).yRot((float) dYaw);
+            // 调整刀柄朝向
             Vec3 posToFace = new Vec3(0, 0, longAxis / 2.5)
                     .zRot(leftOrRight * lunchVerticalRandom).xRot((float) dPitch).yRot((float) dYaw);
             facePoint(lunchModeTarget.add(posToFace));
@@ -380,31 +380,30 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         double d3 = Math.sqrt(d0 * d0 + d2 * d2);
         setXRot((float) (-Math.atan2(d1, d3) * (180 / Math.PI)));
 
-//        float yawMemory, lastYRot, curYRot;
-//        if(Math.abs(curYRot - lastYRot) >= 180){
-//            yawMemory = yawMemory % 360 + curYRot + (curYRot - lastYRot) > 0 ? 360 : -360;
-//        }
         float curYRot = (float) (Math.atan2(d0, d2) * (180 / Math.PI));
-        float angleDelta = curYRot - lastYRot;
-        if (Math.abs(angleDelta) >= 180) {
-            yawMemory += angleDelta > 0 ? -360 : 360;
-            System.out.println(angleDelta);
-        }
-        lastYRot = curYRot;
-        //todo 在z轴方向有坏点, 旋转会跳一下
-        setYRot(yawMemory + curYRot);
+        setYRot(curYRot);
+//        float angleDelta = curYRot - lastYRot;
+//        if (Math.abs(angleDelta) >= 180) {
+//            yawMemory += angleDelta > 0 ? -360 : 360;
+//            System.out.println(angleDelta);
+//        }
+//        lastYRot = curYRot;
+//        setYRot(yawMemory + curYRot);
         xRotO = getXRot();
         yRotO = getYRot();
     }
 
-    private void calculateLunchPitch(Vec3 target) {
+    private void calculateLunchPitch(Vec3 target, Vec3 from) {
         // 用于向render函数传递仰角
-        Vec3 deltaV = position().vectorTo(target);
+        Vec3 deltaV = from.vectorTo(target);
         double x, z;
         x = deltaV.x;
         z = deltaV.z;
         float pitch = (float) Math.atan2(deltaV.y, Math.sqrt(x * x + z * z));
         setLunchPitch(pitch);
+    }
+    private void calculateLunchPitch(Vec3 target) {
+        calculateLunchPitch(target, position());
     }
 
     /** 获取就绪状态 */

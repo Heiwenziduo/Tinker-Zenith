@@ -9,14 +9,18 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import org.joml.Quaternionf;
+
+import static java.lang.Math.PI;
 
 
 /**
@@ -49,75 +53,30 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
     public void render(FlyingSword entity, float entityYaw, float partialTicks,
                        PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
 
+        Level level = entity.level();
         ItemStack stack = entity.getItemStack();
         FlyingSword.BEHAVIOR_MODE_LIST mode = entity.getBehaviorMode();
         int slotNumber = entity.getSlotNumber();
         float lunchPitch = entity.getLunchPitch();
-        float xRot;
-        xRot = entity.getXRot();
-
-        poseStack.pushPose();
-//
-//        // 平滑跟踪位置
-//        Vec3 smoothedPos = entity.getSmoothedPosition(partialTicks);
-//        poseStack.translate(
-//                smoothedPos.x - entity.getX(),
-//                smoothedPos.y - entity.getY(),
-//                smoothedPos.z - entity.getZ()
-//        );
-//
-//        // 轻微抬高飞行位置
-//        poseStack.translate(0, 0.4, 0);
-//
-//        // 朝向移动方向旋转
-//        Vec3 motion = entity.getDeltaMovement();
-//        if (motion.lengthSqr() > 0.001) {
-//            Vec3 norm = motion.normalize();
-//            float yaw = (float)Math.atan2(norm.x, norm.z);
-//            float pitch = (float)Math.asin(norm.y);
-//            poseStack.mulPose(Axis.YP.rotation(yaw));
-//            poseStack.mulPose(Axis.XP.rotation(-pitch));
-//        }
-//
-//        // 动画状态驱动变换
-//        switch (entity.getAnimationState()) {
-//            case "charge" -> {
-//                float progress = entity.getAnimationProgress(partialTicks);
-//                // 冲刺
-//                poseStack.scale(1.4f, 0.7f, 1.4f);
-//                poseStack.mulPose(Axis.YP.rotation(progress * Mth.TWO_PI * 2));
-//            }
-//            case "slash" -> {
-//                float progress = entity.getAnimationProgress(partialTicks);
-//                // 挥砍椭圆轨迹
-//                poseStack.mulPose(Axis.ZP.rotation(Mth.sin(progress * Mth.PI) * 0.8f));
-//                poseStack.scale(1.2f, 1.2f, 1.2f);
-//            }
-//            default -> {
-//                // 待机状态，上下浮动
-//                float idleFloat = Mth.sin((entity.tickCount + partialTicks) * 0.15f) * 0.2f;
-//                float idleRotate = (entity.tickCount + partialTicks) * 0.4f;
-//                poseStack.translate(0, idleFloat, 0);
-//                poseStack.mulPose(Axis.YP.rotationDegrees(idleRotate));
-//            }
-//        }
-//
-        // 渲染模型
-//        VertexConsumer vertexConsumer = buffer.getBuffer(RenderType.entityCutout(TEXTURE));
-//        model.renderToBuffer(poseStack, vertexConsumer, packedLight, OverlayTexture.NO_OVERLAY,
-//                1.0f, 1.0f, 1.0f, 1.0f);
+        float xRot = entity.getXRot();
+        Quaternionf faceYaw = new Quaternionf().setAngleAxis(Math.toRadians(entityYaw), 0, 1, 0);
+        //todo: z正方向处坏点:
+        //System.out.println("Yaw:"+entityYaw+"\nYRot:"+entity.getYRot());
 
         // 大概render在clientSide跑, flyingSword是服务端实体, 想要有材质得把stack从服务端同步过来. 见FlyingSword#defineSynchedData
         // todo: 拖尾
         // todo: 发射抵达终点时, 柄朝玩家
-        // todo: 位于右侧的发射时左右翻转
-        // todo: 再转一轴, 当前仰视时有平移感
 
-
+        poseStack.pushPose();
         if (mode == FlyingSword.BEHAVIOR_MODE_LIST.LAUNCH || mode == FlyingSword.BEHAVIOR_MODE_LIST.RECOUP){
-            //System.out.println(xRot);
+            System.out.println("Pitch:"+lunchPitch * 360/PI+"\nXRot:"+xRot);
             // 与面朝方向相同, 将刀身旋转仰角 = 视角
-            Vec3 rotToVision = new Vec3(0, 0, 1).yRot((float) Math.toRadians(entityYaw)); //todo转轴不对
+            Vec3 rotToVision = new Vec3(0, 0, 1).yRot((float) Math.toRadians(entityYaw)).xRot((float) Math.toRadians(xRot));
+            for (int i=0; i<10; i++){
+                Vec3 position = entity.position().add(rotToVision.scale((double) i / 8));
+                level.addParticle(ParticleTypes.WAX_OFF, position.x, position.y, position.z, 0, 0, 0);
+            }
+            //todo 转角还不对
             Quaternionf q41 = new Quaternionf().setAngleAxis(lunchPitch, rotToVision.x, rotToVision.y, rotToVision.z);
             poseStack.mulPose(q41);
 
@@ -129,18 +88,8 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
             poseStack.mulPose(Axis.YP.rotationDegrees(180));
         }
 
-
-        //poseStack.mulPose(Axis.XP.rotationDegrees(entity.tickCount));
-
-        //Quaternionf q40 = new Quaternionf().setAngleAxis(90, xRotAx.x, xRotAx.y, xRotAx.z);
-        //poseStack.mulPose(q40);
-        //Quaternionf q41 = new Quaternionf().setAngleAxis(Math.toRadians(yaw), 0, 1, 0); // 效果同y轴
-
-        System.out.println("Yaw:"+entityYaw+"\nYRot:"+entity.getYRot());
-
-
         if(slotNumber % 2 == 0) poseStack.mulPose(Axis.YP.rotationDegrees(180)); // 将右侧武器刀口朝外
-        poseStack.mulPose(Axis.YP.rotationDegrees(entityYaw));
+        poseStack.mulPose(faceYaw);
         poseStack.scale(2, 2, 2);
         poseStack.translate(0, textureOffsetY2, 0);
         poseStack.mulPose(Axis.ZP.rotationDegrees(-135));
@@ -173,7 +122,7 @@ public class FlyingSwordRenderer extends EntityRenderer<FlyingSword> {
                 OverlayTexture.NO_OVERLAY,
                 poseStack,
                 buffer,
-                entity.level(),
+                level,
                 entity.getId());
 
         //System.out.println(packedLight); // 15728640 日光下
