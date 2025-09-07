@@ -3,7 +3,6 @@ package com.github.heiwenziduo.tinker_zenith.entity;
 import com.github.heiwenziduo.tinker_zenith.api.FlyingSwordCollideCallback;
 import com.github.heiwenziduo.tinker_zenith.initializer.InitEntity;
 import com.github.heiwenziduo.tinker_zenith.utility.Abbr;
-import com.mojang.logging.LogUtils;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
@@ -23,7 +22,6 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.entity.IEntityAdditionalSpawnData;
 import org.jetbrains.annotations.Nullable;
-import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Objects;
@@ -35,7 +33,7 @@ import java.util.UUID;
  */
 public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     // syncData
-    // private static final EntityDataAccessor<String> DATA_MASTER_UUID = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.STRING);
+    private static final EntityDataAccessor<String> DATA_MASTER_UUID = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Integer> DATA_SLOT_NUMBER = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<String> DATA_BEHAVIOR_MODE = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<ItemStack> DATA_ITEM_STACK = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.ITEM_STACK);
@@ -46,7 +44,6 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     // private static final String ITEM_STACK = "ItemStack";
 
     // initialization
-    private static final Logger LOGGER = LogUtils.getLogger();
     public static final int maxLifetime = 40;
     private static final double displayDensity = .3; // 排列密度
     private static final int maxLunchCooldown = 10; // 这也是魔法数, 设计上应当9剑都存在时可以无缝交替发射, 参考九剑词条中的魔法数
@@ -100,13 +97,18 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     }
     public FlyingSword(Level pLevel, Player player, int slot, ItemStack stack, @Nullable FlyingSwordCollideCallback lambda){
         this(InitEntity.FLYING_SWORD.get(), pLevel);
-
+        // 09/07 这一函数完全运行在服务器中
         setMasterUUID(player.getUUID().toString());
         setSlotNumber(slot);
         setItemStack(stack);
 
         callback = lambda;
         master = player;
+
+//        System.out.println(slotNumber + "initial: " + "\nmaster"+ player + "\nUUID:" + masterUUID);
+//        System.out.println(slotNumber + "clientSide?: " + level().isClientSide);
+//        System.out.println(slotNumber + "addToWorld?:" + isAddedToWorld());
+
         setPos(master.position().add(0,2,0));
         generateSmokeParticle();
         Abbr.setPlayerSwords(master, slot, this);
@@ -135,15 +137,16 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     @Override
     public void tick() {
         baseTick();
-        if (master == null) {
+        if(lifeTime<=0) discard0("lifeTimeOut");
+        if(master == null) {
             if(tickCount % 20 == 0) tryFindMaster();
             return;
         }
 
-        if(!Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST.LAUNCH) && isAboutToDiscard) discard();
+        if(!Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST.LAUNCH) && isAboutToDiscard) discard0("setToDiscard");
         // 飞剑合法性检测: 距离, 维度, 对应物品栏工具
         if(tickCount % 20 == 0) {
-            if(!checkToolStackValidate() || !checkDimensionValidate() || !checkDistanceValidate()) discard();
+            if(!checkSwordsListValidate() || !checkToolStackValidate() || !checkDimensionValidate() || !checkDistanceValidate()) discard0("checksNotValidate");
         }
 
         if(lunchCooldown>0 && !Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST.LAUNCH)) lunchCooldown--;
@@ -163,19 +166,34 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     }
 
     private void tryFindMaster() {
-        if(master==null && masterUUID!=null){
+        //实体在服务端生成后似乎会被同步到客户端
+        // ?为何slotNumber自动同步了, 但masterUUID没有?
+        if(masterUUID == null && level().isClientSide){
+//            System.out.println(slotNumber + "tryFindMaster-------------------------\n" + "master:"+ master + "\nUUID:" + masterUUID + "\nstack:" + itemStack);
+//            System.out.println(slotNumber + "clientSide?: " + level().isClientSide);
+//            System.out.println("syncData:" + getMasterUUID() + "\n" + getItemStack());
+
+            masterUUID = getMasterUUID();
+            itemStack = getItemStack();
+        }
+
+        if(masterUUID!=null){
             Player p = level().getPlayerByUUID(UUID.fromString(masterUUID));
             if(p!=null) {
                 master = p;
                 lifeTime = maxLifetime;
-            } else {
-                lifeTime -= 10;
-                if(lifeTime<=0) discard();
             }
+        } else {
+            lifeTime -= 10;
         }
     }
 
     // 飞剑需要定期确定召唤者在身边，且对应slot的匠魂工具中有此剑的uuid
+    private boolean checkSwordsListValidate() {
+        if(level().isClientSide) return true;
+//        System.out.println(Objects.equals(Abbr.getSword(master, slotNumber), this) + ": compare swordsList");
+        return Objects.equals(Abbr.getSword(master, slotNumber), this); // 这在客户端总是返回false
+    }
     private boolean checkToolStackValidate() {
         if(itemStack == null) return false;
         // tinkerTool只有正常用构造器调用时才不为null且该值不写入硬盘, 故重建存档时销毁所有现存飞剑
@@ -189,8 +207,9 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
 //        Console(master, slotNumber+"号--2\n"+getStringUUID()+"\n"+uuid+"\n"+slot);
 //        return !uuid.isEmpty() && uuid.equals(getStringUUID()) && slot == slotNumber;
 
-        // ItemStack stack = master.getInventory().getItem(slotNumber).getItem();
-        return true;
+        ItemStack stack = master.getInventory().getItem(slotNumber);
+        //System.out.println(Objects.equals(itemStack, stack) + ": compare itemStacks");
+        return Objects.equals(itemStack, stack);
     }
     private boolean checkDimensionValidate() {
         // todo 不同维度直接删除
@@ -316,9 +335,8 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         // 碰撞和实体交互
         AABB aabb = AABB.ofSize(position(), 1, 1, 1);
         List<? extends Entity> entitiesList = level().getEntities(this, aabb,
-                entity -> entity instanceof LivingEntity && entity.isPickable() && entity.isAlive());
+                e -> e instanceof LivingEntity && e.isPickable() && e.isAlive() && e != master);
         for(var targetEntity : entitiesList){
-            if(targetEntity == master) continue;
             if(callback != null) callback.onCollide(targetEntity);
         }
         return false;
@@ -431,30 +449,45 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         super.kill();
     }
 
+    /// 封装销毁方法, @return: ...
+    private boolean discard0(String text) {
+        System.out.println(slotNumber + " tryDiscard: " + text + "  Client: " + level().isClientSide);
+        if(!level().isClientSide){
+            // 原生kill会在服务端和客户端同步(大概因为发出了事件)
+            kill();
+        }
+        return true;
+    }
+    private boolean discard0() {
+        return discard0("?");
+    }
+
     // 数据管理 ========================================
     /** 设置与服务器同步的数据 */
     @Override
     protected void defineSynchedData() {
-        entityData.define(DATA_ITEM_STACK, ItemStack.EMPTY);
-        entityData.define(DATA_BEHAVIOR_MODE, BEHAVIOR_MODE_LIST.IDLE.text);
+        entityData.define(DATA_MASTER_UUID, "");
         entityData.define(DATA_SLOT_NUMBER, 0);
+        entityData.define(DATA_BEHAVIOR_MODE, BEHAVIOR_MODE_LIST.IDLE.text);
+        entityData.define(DATA_ITEM_STACK, ItemStack.EMPTY);
         entityData.define(DATA_LUNCH_PITCH, 0f);
-        //改用生成时一次性同步的数据，因为masterUUID不会改变
-        //entityData.define(DATA_MASTER_UUID, "");
     }
 
-    /** 实体生成时与服务器同步一次，随后撒手 */
+    /** 实体生成时与服务器同步一次 */
     @Override
     public void writeSpawnData(FriendlyByteBuf buffer) {
         buffer.writeUUID(getUUID());
-        buffer.writeUtf(masterUUID);
+        //buffer.writeUtf(masterUUID);
+
+        // 09/07 此函数似乎没有执行
+        //System.out.println("writeSpawnData========masterUUID======" + masterUUID);
     }
 
-    /** 实体生成时与服务器同步一次，随后撒手 */
+    /** 实体生成时与服务器同步一次 */
     @Override
     public void readSpawnData(FriendlyByteBuf buffer) {
         setUUID(buffer.readUUID());
-        setMasterUUID(buffer.readUtf());
+        //setMasterUUID(buffer.readUtf());
     }
 
     /** 从存档中读取长久保存的数据 */
@@ -509,6 +542,10 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         isAboutToDiscard = true;
     }
 
+    public String getMasterUUID() {
+        return getEntityData().get(DATA_MASTER_UUID);
+    }
+
     public int getSlotNumber() {
         return getEntityData().get(DATA_SLOT_NUMBER);
     }
@@ -532,7 +569,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     // 一些简写 ===================================
     private void setMasterUUID(String uuid) {
         masterUUID = uuid;
-        // entityData.set(DATA_MASTER_UUID, uuid);
+        entityData.set(DATA_MASTER_UUID, uuid);
     }
     private void setSlotNumber(int slot) {
         slotNumber = slot;
@@ -541,14 +578,13 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     private void setLunchPitch(float pitch) {
         entityData.set(DATA_LUNCH_PITCH, pitch);
     }
-    /** @param mode: 0--IDLE; 1--LUNCH; 2--RECOUP */
     private void setBehaviorMode(BEHAVIOR_MODE_LIST mode) {
         behaviorMode = mode;
         entityData.set(DATA_BEHAVIOR_MODE, mode.text);
     }
     private void setItemStack(ItemStack stack) {
         itemStack = stack;
-        getEntityData().set(DATA_ITEM_STACK, stack);
+        entityData.set(DATA_ITEM_STACK, stack);
     }
 
 }

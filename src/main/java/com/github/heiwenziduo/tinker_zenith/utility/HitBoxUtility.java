@@ -17,7 +17,7 @@ public class HitBoxUtility {
     public static Vec3 findVisionPosition(Entity entity, float maxDistance, boolean ignoreBlock, @Nullable List<? extends Entity> excludeEntities) {
         Level level = entity.level();
         Vec3 lookAt = entity.getLookAngle();
-        Vec3 startPos = entity.position();
+        Vec3 startPos = entity.position().add(0, entity.getEyeHeight(), 0);
         Vec3 endPos = startPos.add(lookAt.scale(maxDistance));
 
         if (!ignoreBlock){
@@ -33,7 +33,7 @@ public class HitBoxUtility {
         for (var e : entitiesList){
             //System.out.println(e);
             if(excludeEntities != null && excludeEntities.contains(e)) continue;
-            //todo: 判定范围随目标碰撞箱而定
+            //todo: 判定范围随目标碰撞箱而定 #getBbWidth, 然后通过向量算出来
             if(Vector0.getTheta(lookAt, startPos.vectorTo(e.position())) >=  (double) 1 /20) continue;
             double d = startPos.distanceToSqr(e.position());
             if(d < dSqr) dSqr = d;
