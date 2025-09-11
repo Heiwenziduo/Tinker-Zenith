@@ -136,32 +136,46 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
 
     @Override
     public void tick() {
+        /// test start
+        try {
+            if(tickCount % 20 == 0) System.out.println(position());
+        } catch (Exception e) {
+            System.out.println(e);
+            //throw new RuntimeException(e);
+        }
+        /// test end
         baseTick();
-        if(lifeTime<=0) discard0("lifeTimeOut");
+        if(lifeTime<=0 && !level().isClientSide) discard0("lifeTimeOut");
         if(master == null) {
             if(tickCount % 20 == 0) tryFindMaster();
             return;
         }
 
-        if(!Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST.LAUNCH) && isAboutToDiscard) discard0("setToDiscard");
-        // 飞剑合法性检测: 距离, 维度, 对应物品栏工具
-        if(tickCount % 20 == 0) {
-            if(!checkSwordsListValidate() || !checkToolStackValidate() || !checkDimensionValidate() || !checkDistanceValidate()) discard0("checksNotValidate");
+        // 仅在服务端执行销毁判断
+        if(!level().isClientSide) {
+            if(!Objects.equals(getBehaviorMode(), BEHAVIOR_MODE_LIST.LAUNCH) && isAboutToDiscard) discard0("setToDiscard");
+            // 飞剑合法性检测: 距离, 维度, 对应物品栏工具
+            if(tickCount % 20 == 0) {
+                if(!checkSwordsListValidate()) discard0("SwordsListNotValidate");
+                if(!checkToolStackValidate()) discard0("ToolStackNotValidate");
+                if(!checkDimensionValidate()) discard0("DimensionNotValidate");
+                if(!checkDistanceValidate()) discard0("DistanceNotValidate");
+            }
         }
 
-        if(lunchCooldown>0 && !Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST.LAUNCH)) lunchCooldown--;
+        if(lunchCooldown>0 && !Objects.equals(getBehaviorMode(), BEHAVIOR_MODE_LIST.LAUNCH)) lunchCooldown--;
 
-        if(Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST.IDLE)){
+        if(Objects.equals(getBehaviorMode(), BEHAVIOR_MODE_LIST.IDLE)){
             // idle
             IdleMode();
-        } else if (Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST.LAUNCH)) {
+        } else if (Objects.equals(getBehaviorMode(), BEHAVIOR_MODE_LIST.LAUNCH)) {
             // lunching
             LunchingMode();
-            checkHitBoxCollide();
+            if(!level().isClientSide) checkHitBoxCollide();
         } else {
             // recoup
             RecoupingMode();
-            checkHitBoxCollide();
+            if(!level().isClientSide) checkHitBoxCollide();
         }
     }
 
@@ -192,7 +206,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     private boolean checkSwordsListValidate() {
         if(level().isClientSide) return true;
 //        System.out.println(Objects.equals(Abbr.getSword(master, slotNumber), this) + ": compare swordsList");
-        return Objects.equals(Abbr.getSword(master, slotNumber), this); // 这在客户端总是返回false
+        return Objects.equals(Abbr.getSword(master, getSlotNumber()), this); // 这在客户端总是返回false // ?
     }
     private boolean checkToolStackValidate() {
         if(itemStack == null) return false;
@@ -207,8 +221,10 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
 //        Console(master, slotNumber+"号--2\n"+getStringUUID()+"\n"+uuid+"\n"+slot);
 //        return !uuid.isEmpty() && uuid.equals(getStringUUID()) && slot == slotNumber;
 
-        ItemStack stack = master.getInventory().getItem(slotNumber);
+        ItemStack stack = master.getInventory().getItem(getSlotNumber());
         //System.out.println(Objects.equals(itemStack, stack) + ": compare itemStacks");
+
+        // 09/11 为何一打开物品栏就销毁了?
         return Objects.equals(itemStack, stack);
     }
     private boolean checkDimensionValidate() {
@@ -265,11 +281,12 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         // 快捷栏的每把飞剑都有自己对应的位置: 7 5 3 1 0 2 4 6 8
         Vec3 masterBack, back, perpendicular, verOffset, position0, lookingAngle;
         double slotCoefficient, horizontalOffset, verticalOffset;
+        int slotNumber = getSlotNumber();
 
         position0 = position();
         lookingAngle = master.getLookAngle();
         //todo bug: +-90°时剑不跟随
-        if((lookingAngle.y == 1 || lookingAngle.y == -1) && behaviorMode != BEHAVIOR_MODE_LIST.RECOUP) return position0; // 避免抬头望天时缩成一团
+        if((lookingAngle.y == 1 || lookingAngle.y == -1) && getBehaviorMode() != BEHAVIOR_MODE_LIST.RECOUP) return position0; // 避免抬头望天时缩成一团
 
         slotCoefficient = Math.ceil((double) slotNumber /2);
         horizontalOffset = Math.pow(-1, slotNumber) * slotCoefficient * displayDensity;
@@ -300,7 +317,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
             tmp = b*b - b*b * (z-a)*(z-a) / (a*a);
 //            boolean minus = tmp <= 0;
             // 左侧-1, 右侧+1
-            float leftOrRight = (float) Math.pow(-1, slotNumber);
+            float leftOrRight = (float) Math.pow(-1, getSlotNumber());
             x = leftOrRight * Math.sqrt(Math.abs(tmp));
 
             // 调整朝向, 指向椭圆z轴
@@ -330,9 +347,9 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
             RecoupingMode();
         }
     }
+    /// 碰撞和实体交互, 应当只在服务端执行
     private boolean checkHitBoxCollide() {
         // todo 引用玩家攻击 参: @sakuraTinker 工匠箭矢
-        // 碰撞和实体交互
         AABB aabb = AABB.ofSize(position(), 1, 1, 1);
         List<? extends Entity> entitiesList = level().getEntities(this, aabb,
                 e -> e instanceof LivingEntity && e.isPickable() && e.isAlive() && e != master);
@@ -344,6 +361,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
 
     public boolean triggerLunch(Vec3 targetPoint, float pitch, float yaw) {
         if(!canLunch()) return false;
+        //todo: 同步 lunchModeTarget lunchVerticalRandom
         setBehaviorMode(BEHAVIOR_MODE_LIST.LAUNCH);
         lunchCooldown = maxLunchCooldown;
         lunchTickRemaining = windowOfAttackTick;
@@ -382,7 +400,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
             z = longAxis * t / windowOfAttackTick;
             tmp = b*b - b*b * (z-a)*(z-a) / (a*a);
             // 左侧-1, 右侧+1
-            float leftOrRight = (float) Math.pow(-1, slotNumber);
+            float leftOrRight = (float) Math.pow(-1, getSlotNumber());
             x = leftOrRight * Math.sqrt(Math.abs(tmp));
 
             // 调整刀柄朝向
@@ -440,7 +458,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
 
     /** 获取就绪状态 */
     private boolean canLunch() {
-        return lunchCooldown <= 0 && Objects.equals(behaviorMode, BEHAVIOR_MODE_LIST.IDLE);
+        return lunchCooldown <= 0 && Objects.equals(getBehaviorMode(), BEHAVIOR_MODE_LIST.IDLE);
     }
 
     @Override
@@ -451,7 +469,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
 
     /// 封装销毁方法, @return: ...
     private boolean discard0(String text) {
-        System.out.println(slotNumber + " tryDiscard: " + text + "  Client: " + level().isClientSide);
+        System.out.println(getSlotNumber() + " tryDiscard: " + text + "  Client: " + level().isClientSide);
         if(!level().isClientSide){
             // 原生kill会在服务端和客户端同步(大概因为发出了事件)
             kill();
@@ -506,7 +524,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     @Override
     protected void addAdditionalSaveData(CompoundTag pCompound) {
         if(masterUUID != null) pCompound.putString(MASTER_UUID, masterUUID);
-        pCompound.putInt(SLOT_NUMBER, slotNumber);
+        pCompound.putInt(SLOT_NUMBER, getSlotNumber());
     }
 
 
