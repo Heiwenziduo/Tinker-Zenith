@@ -14,7 +14,7 @@ import java.util.List;
 /// 碰撞箱相关
 public class HitBoxUtility {
     /// 给定实体视线方向最近的实体/方块/空气
-    public static Vec3 findVisionPosition(Entity entity, float maxDistance, boolean ignoreBlock, @Nullable List<? extends Entity> excludeEntities) {
+    public static <T extends LivingEntity> Vec3 findVisionPosition(Entity entity, float maxDistance, boolean ignoreBlock, @Nullable List<T> excludeEntityTypes) {
         Level level = entity.level();
         Vec3 lookAt = entity.getLookAngle();
         Vec3 startPos = entity.position().add(0, entity.getEyeHeight(), 0);
@@ -32,9 +32,11 @@ public class HitBoxUtility {
                 e -> e instanceof LivingEntity && e.isPickable() && e.isAlive());
         for (var e : entitiesList){
             //System.out.println(e);
-            if(excludeEntities != null && excludeEntities.contains(e)) continue;
-            //todo: 判定范围随目标碰撞箱而定 #getBbWidth, 然后通过向量算出来
-            if(Vector0.getTheta(lookAt, startPos.vectorTo(e.position())) >=  (double) 1 /20) continue;
+            //动态检测类型, 还没搞定
+            //if(excludeEntityTypes != null && excludeEntityTypes.stream().anyMatch(type -> e instanceof type)) continue;
+            Vec3 toTarget = startPos.vectorTo(e.position().add(0, e.getBbHeight() / 2, 0));
+            double theta = Vector0.getTheta(lookAt, toTarget);
+            if(Math.sin(theta) * toTarget.length() > Math.max(e.getBbHeight(), e.getBbWidth()) / 2) continue;
             double d = startPos.distanceToSqr(e.position());
             if(d < dSqr) dSqr = d;
         }
@@ -43,5 +45,9 @@ public class HitBoxUtility {
     /// 给定实体视线方向最近的实体/方块/空气, 默认距离16
     public static Vec3 findVisionPosition(Entity entity) {
         return findVisionPosition(entity, 16, false, null);
+    }
+    /// 给定实体视线方向最近的实体/方块/空气, 默认距离16
+    public static Vec3 findVisionPosition(Entity entity, List<? extends LivingEntity> excludeEntities) {
+        return findVisionPosition(entity, 16, false, excludeEntities);
     }
 }
