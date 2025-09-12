@@ -45,18 +45,17 @@ public class NineSwordTag extends SingleLevelModifier implements InventoryTickMo
         if(!level.isClientSide){
             int total = Abbr.getFlyingSwordCount(player);
             // 发射需要满足的条件: 1.处于发射窗口(即下述判定) 2.存在飞剑冷却完毕
-            // 富含魔力的算式*1
-            if(player.tickCount % (20 - total*2) != 0) return;
+            if(player.tickCount % 2 != 0) return;
             for (int i=0; i<9; i++){
                 FlyingSword sword = Abbr.getSword(player, i);
                 if(sword != null){
                     Vec3 target = HitBoxUtility.findVisionPosition(player);
-                    boolean lunched = sword.triggerLunch(target, player.getViewXRot(1), player.getViewYRot(1));
+                    boolean lunched = sword.triggerLunch(target);
                     if(lunched) break;
                 }
             }
         } else {
-            // DeBug.Console(player, "onUsingTickClientSide");
+            //
         }
 
     }

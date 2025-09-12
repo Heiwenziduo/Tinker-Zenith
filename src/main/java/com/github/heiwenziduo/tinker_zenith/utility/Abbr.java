@@ -17,7 +17,7 @@ public class Abbr {
     }
 
     /** 使得玩家实体可以访问飞剑 */
-    public static void setPlayerSwords(Player player, int slot, FlyingSword sword){
+    public static void setPlayerSwords(Player player, int slot, @Nullable FlyingSword sword){
         ((PlayerMixinAPI) player).getFlyingSwordManager().set(slot, sword);
     }
 

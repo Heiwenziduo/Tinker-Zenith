@@ -25,6 +25,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.entity.IEntityAdditionalSpawnData;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Vector3f;
 
 import java.util.List;
 import java.util.Objects;
@@ -40,6 +41,8 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     private static final EntityDataAccessor<Integer> DATA_SLOT_NUMBER = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<String> DATA_BEHAVIOR_MODE = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<ItemStack> DATA_ITEM_STACK = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.ITEM_STACK);
+    private static final EntityDataAccessor<Vector3f> DATA_LUNCH_TARGET = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.VECTOR3);
+    private static final EntityDataAccessor<Float> DATA_LUNCH_VERTICAL_RANDOM = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> DATA_LUNCH_PITCH = SynchedEntityData.defineId(FlyingSword.class, EntityDataSerializers.FLOAT);
     private static final String MASTER_UUID = "MasterUUID";
     private static final String SLOT_NUMBER = "SlotNumber";
@@ -109,7 +112,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         callback = lambda;
         master = player;
 
-        setPos(master.position().add(0,2,0));
+        setPos(master.position().add(0,3,0));
         generateSmokeParticle();
         Abbr.setPlayerSwords(master, slot, this);
     }
@@ -153,7 +156,8 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     public void tick() {
         /// test start
         try {
-            if(tickCount % 20 == 0) System.out.println(position());
+            //todo 两端位置不一致
+            //if(tickCount % 3 == 0) System.out.println(position());
         } catch (Exception e) {
             System.out.println(e);
             //throw new RuntimeException(e);
@@ -178,7 +182,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
             }
         }
 
-        if(lunchCooldown>0 && !Objects.equals(getBehaviorMode(), BEHAVIOR_MODE_LIST.LAUNCH)) lunchCooldown--;
+        if(lunchCooldown > 0 && !Objects.equals(getBehaviorMode(), BEHAVIOR_MODE_LIST.LAUNCH)) lunchCooldown--;
 
         if(Objects.equals(getBehaviorMode(), BEHAVIOR_MODE_LIST.IDLE)){
             // idle
@@ -221,7 +225,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     private boolean checkSwordsListValidate() {
         if(level().isClientSide) return true;
 //        System.out.println(Objects.equals(Abbr.getSword(master, slotNumber), this) + ": compare swordsList");
-        return Objects.equals(Abbr.getSword(master, getSlotNumber()), this); // 这在客户端总是返回false // ?
+        return Objects.equals(Abbr.getSword(master, getSlotNumber()), this); // 这在客户端总是返回false // 因为List没有同步到客户端
     }
     private boolean checkToolStackValidate() {
         if(itemStack == null) return false;
@@ -319,7 +323,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     private void LunchingMode() {
         if(lunchTickRemaining>0){
             lunchTickRemaining--;
-            calculateLunchPitch(lunchModeTarget);
+            updateLunchPitch(lunchModeTarget);
             // 写一个简单的椭球, 定义长半轴为a, 两个短半轴均为b
             // pitch, yaw 两变量可参考此文
             // https://www.jianshu.com/p/a824e3cc4573
@@ -340,7 +344,6 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
                     .zRot(-1 * leftOrRight * lunchVerticalRandom).xRot(lunchPitchRadius).yRot(lunchYawRadius);
             facePoint(lunchInitPosition.add(posToFace));
 
-            //todo 发射终点椭圆轨迹缺一块
             //产生一道指向posToFace的粒子线, 测试用
 //            Vec3 pPo = position().vectorTo(lunchInitPosition.add(posToFace));
 //            for (int i=0;i<20;i++){
@@ -358,36 +361,23 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         } else {
             setBehaviorMode(BEHAVIOR_MODE_LIST.RECOUP);
             recoupTickRemaining = windowOfAttackTick;
-            // 立刻调用一次, 不然在目标点有1tick停顿
-            RecoupingMode();
+            // 立刻调用一次, 不然在目标点有1tick停顿 // 09/12 这就是椭圆缺一块的原因
+            //RecoupingMode();
         }
     }
 
-    public boolean triggerLunch(Vec3 targetPoint, float pitch, float yaw) {
+    public boolean triggerLunch(Vec3 targetPoint) {
         if(!canLunch()) return false;
-        //todo: 同步 lunchModeTarget lunchVerticalRandom
+        setLunchTarget(targetPoint);
+        setLunchVerticalRandom((float) Math.toRadians(Math.random() * 30));
         setBehaviorMode(BEHAVIOR_MODE_LIST.LAUNCH);
-        lunchCooldown = maxLunchCooldown;
-        lunchTickRemaining = windowOfAttackTick;
-        // 发射路径会在一开始就确定好
-        lunchInitPosition = position();
-        lunchModeTarget = targetPoint;
-        lunchVerticalRandom = (float) Math.toRadians(Math.random() * 30);
-        lunchEllipseMajor = position().distanceTo(lunchModeTarget);
-        lunchEllipseShort = 2 * lunchEllipseMajor / 3;
-
-        // 应当基于飞剑位置求出yaw和pitch, 用player传进来的会产生偏差
-        Vec3 deltaV = position().vectorTo(targetPoint);
-        lunchYawRadius = (float) Math.atan2(deltaV.x, deltaV.z);
-        lunchPitchRadius = (float) Math.atan2(deltaV.y, Math.sqrt(deltaV.x * deltaV.x + deltaV.z * deltaV.z));
-
         return true;
     }
 
     private void RecoupingMode() {
         if(recoupTickRemaining>0){
             recoupTickRemaining--;
-            calculateLunchPitch(master.position(), lunchModeTarget);
+            updateLunchPitch(master.position(), lunchModeTarget);
             // 同发射时相同, 不过这边椭圆随玩家位置动态更新
             double a, b, x, z, tmp, longAxis, dYaw, dPitch;
             Vec3 deltaV;
@@ -447,8 +437,9 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         yRotO = getYRot();
     }
 
-    private void calculateLunchPitch(Vec3 target, Vec3 from) {
-        // 用于向render函数传递仰角
+    private void updateLunchPitch(Vec3 target, Vec3 from) {
+        // 用于向render函数传递仰角, 客户端不用算
+        if(level().isClientSide) return;
         Vec3 deltaV = from.vectorTo(target);
         double x, z;
         x = deltaV.x;
@@ -456,8 +447,8 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         float pitch = (float) Math.atan2(deltaV.y, Math.sqrt(x * x + z * z));
         setLunchPitch(pitch);
     }
-    private void calculateLunchPitch(Vec3 target) {
-        calculateLunchPitch(target, position());
+    private void updateLunchPitch(Vec3 target) {
+        updateLunchPitch(target, position());
     }
 
     /** 获取就绪状态 */
@@ -489,6 +480,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         System.out.println(getSlotNumber() + " tryDiscard: " + text + "  Client: " + level().isClientSide);
         if(!level().isClientSide){
             // 原生kill会在服务端和客户端同步(大概因为发出了事件)
+            Abbr.setPlayerSwords(master, getSlotNumber(), null);
             kill();
         }
         return true;
@@ -505,7 +497,38 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         entityData.define(DATA_SLOT_NUMBER, 0);
         entityData.define(DATA_BEHAVIOR_MODE, BEHAVIOR_MODE_LIST.IDLE.text);
         entityData.define(DATA_ITEM_STACK, ItemStack.EMPTY);
+        entityData.define(DATA_LUNCH_TARGET, Vec3.ZERO.toVector3f());
+        entityData.define(DATA_LUNCH_VERTICAL_RANDOM, 0f);
         entityData.define(DATA_LUNCH_PITCH, 0f);
+    }
+
+    @Override
+    public void onSyncedDataUpdated(EntityDataAccessor<?> pKey) {
+        //super.onSyncedDataUpdated(pKey);
+        if(DATA_BEHAVIOR_MODE.equals(pKey)) {
+            // System.out.println("onSyncedDataUpdated: isClient?:" + level().isClientSide); // 两端都有
+            BEHAVIOR_MODE_LIST mode = getBehaviorMode();
+            if(mode == BEHAVIOR_MODE_LIST.LAUNCH) {
+                // 在改变模式为发射时, 两端同时初始化
+                lunchCooldown = maxLunchCooldown;
+                lunchTickRemaining = windowOfAttackTick;
+                // 发射路径会在一开始就确定好
+                lunchInitPosition = position();
+                lunchModeTarget = getLunchModeTarget();
+                lunchVerticalRandom = getLunchVerticalRandom();
+                lunchEllipseMajor = position().distanceTo(lunchModeTarget);
+                lunchEllipseShort = 2 * lunchEllipseMajor / 3;
+
+                // 应当基于飞剑位置求出yaw和pitch, 用player传进来的会产生偏差
+                Vec3 deltaV = position().vectorTo(lunchModeTarget);
+                lunchYawRadius = (float) Math.atan2(deltaV.x, deltaV.z);
+                lunchPitchRadius = (float) Math.atan2(deltaV.y, Math.sqrt(deltaV.x * deltaV.x + deltaV.z * deltaV.z));
+            }
+            if(mode == BEHAVIOR_MODE_LIST.RECOUP) {
+                // 在recoup方法里动态计算, 所需数据已在lunch中赋值, ##假定所有recoup都在lunch之后
+            }
+            System.out.println("mode:" + mode.text);
+        }
     }
 
     /** 实体生成时与服务器同步一次 */
@@ -571,7 +594,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         }
     }
 
-    // 对外方法 ===================================
+    // 同步方法 ===================================
     /** 外部调用的销毁函数, 会在一个攻击周期后自动销毁 */
     public void setToDiscard(@Nullable String message) {
         isAboutToDiscard = true;
@@ -599,6 +622,14 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         return BEHAVIOR_MODE_LIST.fromString(getEntityData().get(DATA_BEHAVIOR_MODE));
     }
 
+    public Vec3 getLunchModeTarget() {
+        return new Vec3(getEntityData().get(DATA_LUNCH_TARGET));
+    }
+
+    public float getLunchVerticalRandom() {
+        return getEntityData().get(DATA_LUNCH_VERTICAL_RANDOM);
+    }
+
 
 
     // 一些简写 ===================================
@@ -621,5 +652,18 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         itemStack = stack;
         entityData.set(DATA_ITEM_STACK, stack);
     }
+    private void setLunchTarget(Vec3 v3) {
+        lunchModeTarget = v3;
+        entityData.set(DATA_LUNCH_TARGET, v3.toVector3f());
+    }
+    private void setLunchVerticalRandom(float r) {
+        lunchVerticalRandom = r;
+        entityData.set(DATA_LUNCH_VERTICAL_RANDOM, r);
+    }
 
+    public static final class Calculator {
+        public Vec3 ellipse() {
+            return Vec3.ZERO;
+        }
+    }
 }
