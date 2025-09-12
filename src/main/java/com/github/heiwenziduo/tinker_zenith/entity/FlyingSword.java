@@ -21,6 +21,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.entity.IEntityAdditionalSpawnData;
 import org.jetbrains.annotations.NotNull;
@@ -51,7 +52,7 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
 
     // initialization
     public static final int maxLifetime = 40;
-    private static final double displayDensity = .3; // 排列密度
+    private static final double displayDensity = .4; // 排列密度
     private static final int maxLunchCooldown = 10; // 这也是魔法数, 设计上应当9剑都存在时可以无缝交替发射, 参考九剑词条中的魔法数
     private static final int windowOfAttackTick = 8; // 决定了剑会多久抵达目标点
     public enum BEHAVIOR_MODE_LIST{
@@ -272,9 +273,9 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         faceMaster();
         Vec3 delta0 = getDeltaMovement();
         // 无指令时：1.保持在玩家背后 2.跟随移动 3.跟随传送
-        Vec3 ownerBack = calculateIdlePos();
+        Vec3 masterBack = calculateIdlePos();
         Vec3 current = position();
-        Vec3 delta = ownerBack.subtract(current);
+        Vec3 delta = masterBack.subtract(current);
         double distance = delta.length();
 
         // if(level().isClientSide) {}
@@ -285,39 +286,36 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
 
         if (distance > 1.0e-7d) {
             // todo: 设置一个合适的跟随速度, 当前会抽搐, 大概是单次移动距离过大的原因
-            Vec3 motion = delta.normalize().scale(Mth.clamp(distance*distance*0.5, 1.0e-7d, distance * 1));
-//            Vec3 motion = delta;
+            //Vec3 motion = delta.normalize().scale(Mth.clamp(distance*distance*0.5, 1.0e-7d, distance * 1));
+            Vec3 motion = delta.normalize().scale(distance * 0.9);
+            //Vec3 motion = delta;
             setDeltaMovement(motion);
 
             setPos(current.add(motion));
         } else {
             setDeltaMovement(Vec3.ZERO);
         }
-        // lookAt(master);
     }
 
     private Vec3 calculateIdlePos() {
         // 快捷栏的每把飞剑都有自己对应的位置: 7 5 3 1 0 2 4 6 8
-        Vec3 masterBack, back, perpendicular, verOffset, position0, lookingAngle;
-        double slotCoefficient, horizontalOffset, verticalOffset;
+        Vec3 masterBack, perpendicular, verOffset;
+        double slotCoefficient, horizontalOffset, verticalOffset, circleCoefficient;
         int slotNumber = getSlotNumber();
-
-        position0 = position();
-        lookingAngle = master.getLookAngle();
-        //todo bug: +-90°时剑不跟随
-        if((lookingAngle.y == 1 || lookingAngle.y == -1) && getBehaviorMode() != BEHAVIOR_MODE_LIST.RECOUP) return position0; // 避免抬头望天时缩成一团
+        Vec3 faceVec = Vec3.directionFromRotation(new Vec2(0, master.getYRot()));
 
         slotCoefficient = Math.ceil((double) slotNumber /2);
+        circleCoefficient = Math.cos(slotCoefficient * Math.PI / 8);
         horizontalOffset = Math.pow(-1, slotNumber) * slotCoefficient * displayDensity;
-        verticalOffset = 1.0 - slotCoefficient * displayDensity / 2;
+        //verticalOffset = 1.0 - slotCoefficient * displayDensity / 2;
+        verticalOffset = circleCoefficient * (displayDensity + 0.2) + 0.8;
 
-        masterBack = lookingAngle.scale(-1.2 + 0.1 * slotCoefficient); // 排列为弧形
-        back = new Vec3(masterBack.x, 0, masterBack.z).normalize();
+        masterBack = faceVec.scale(-0.8 - 0.4 * circleCoefficient); // 排列为弧形
         // 构造垂直向量
-        perpendicular = new Vec3(masterBack.z, 0, -1 * masterBack.x).normalize();
+        perpendicular = new Vec3(masterBack.z, 0, -1 * masterBack.x).normalize().scale(horizontalOffset);
         verOffset = new Vec3(0, verticalOffset, 0);
 
-        return master.position().add(back.add(perpendicular.scale(horizontalOffset)).add(verOffset));
+        return master.position().add(masterBack.add(perpendicular).add(verOffset));
     }
 
     private void LunchingMode() {
@@ -527,7 +525,6 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
             if(mode == BEHAVIOR_MODE_LIST.RECOUP) {
                 // 在recoup方法里动态计算, 所需数据已在lunch中赋值, ##假定所有recoup都在lunch之后
             }
-            System.out.println("mode:" + mode.text);
         }
     }
 
