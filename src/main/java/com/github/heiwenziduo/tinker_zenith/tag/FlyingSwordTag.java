@@ -44,9 +44,9 @@ public class FlyingSwordTag extends SingleLevelModifier implements
     /// 生成飞剑，一个工具对应的飞剑应当是唯一的
     private static String generateFlyingSword(IToolStackView tool, Level level, Player player, int itemSlot, ItemStack stack, @Nullable String uuid){
         FlyingSwordCollideCallback onFlyingSwordCollide = (targetEntity) -> {
-            System.out.println(targetEntity);
-            targetEntity.invulnerableTime = 0;
             //todo: 用快捷栏工具攻击
+            //System.out.println(targetEntity);
+            targetEntity.invulnerableTime = 0;
             ToolAttackUtil.attackEntity(tool, player, InteractionHand.OFF_HAND, targetEntity,
                     ToolAttackUtil.getCooldownFunction(player, InteractionHand.OFF_HAND), false, EquipmentSlot.MAINHAND);
 
@@ -70,6 +70,11 @@ public class FlyingSwordTag extends SingleLevelModifier implements
     @Override
     public void onInventoryTick(IToolStackView tool, ModifierEntry modifier, Level level, LivingEntity holder, int itemSlot, boolean isSelected, boolean isCorrectSlot, ItemStack stack) {
         if(!(holder instanceof Player player)) return;
+        if(level.isClientSide) return; // uuid生成有随机性，为了避免两端不同步问题只用服务端创实体，然后通过某种神秘的minecraft力量同步
+        if(!Inventory.isHotbarSlot(itemSlot)) {
+            removeFlyingSwordData(tool);
+            return; // 只有位于快捷栏且不在副手时生成飞剑
+        }
         //stack = stack.copy();
         // todo: 处理位于副手的情况 08/21
         // if(itemSlot==0 && player.getOffhandItem().equals(tool)) return;
@@ -85,22 +90,22 @@ public class FlyingSwordTag extends SingleLevelModifier implements
 //            // level.getEntity(UUID.fromString(uuid));
 //        }
 
-        if(level.isClientSide) return; // uuid生成有随机性，为了避免两端不同步问题只用服务端创实体，然后通过某种神秘的minecraft力量同步
         if(player.tickCount % FlyingSword.maxLifetime != 19) return; // 此处有魔法数19
         // 将生成的飞剑实体id存到工具本身上, 再存一个当前槽位方便飞剑那边访问
         String uuid =  tool.getPersistentData().getString(PERSISTENT_UUID_KEY);
         int slot0 = tool.getPersistentData().getInt(PERSISTENT_SLOT);
         if(slot0 != itemSlot) tool.getPersistentData().putInt(PERSISTENT_SLOT, itemSlot);
 
-        if(!Inventory.isHotbarSlot(itemSlot)) return; // 只有位于快捷栏且不在副手时生成飞剑
         FlyingSword flyingSword = Abbr.getSword(player, itemSlot);
         if(flyingSword == null){
             String uuid1 = generateFlyingSword(tool, level, player, itemSlot, stack, null);
             tool.getPersistentData().putString(PERSISTENT_UUID_KEY, uuid1);
+
         } else if (uuid.isEmpty() || !uuid.equals(flyingSword.getStringUUID()) || itemSlot != flyingSword.getSlotNumber()) {
             flyingSword.setToDiscard("in list but no uuid on tool || uuid not match");
             String uuid1 = generateFlyingSword(tool, level, player, itemSlot, stack, null);
             tool.getPersistentData().putString(PERSISTENT_UUID_KEY, uuid1);
+
         } else {
             // 完全匹配, 你的剑就是我的剑
 
@@ -112,13 +117,23 @@ public class FlyingSwordTag extends SingleLevelModifier implements
 
     @Override
     public @Nullable Component onRemoved(IToolStackView tool, Modifier modifier) {
-        tool.getPersistentData().remove(PERSISTENT_UUID_KEY);
-        tool.getPersistentData().remove(PERSISTENT_SLOT);
+        removeFlyingSwordData(tool);
         return null;
     }
 
     @Override
     public void addTooltip(IToolStackView tool, ModifierEntry modifier, @Nullable Player player, List<Component> tooltip, TooltipKey tooltipKey, TooltipFlag tooltipFlag) {
+        if(isSwordGenerated(tool)){
+            tooltip.add(Component.translatable("tinker_zenith.tooltip.flying_sword"));
+        }
+    }
 
+    private void removeFlyingSwordData(IToolStackView tool) {
+        tool.getPersistentData().remove(PERSISTENT_UUID_KEY);
+        tool.getPersistentData().remove(PERSISTENT_SLOT);
+    }
+    private boolean isSwordGenerated(IToolStackView tool) {
+        //System.out.println(tool.getPersistentData().contains(PERSISTENT_UUID_KEY));
+        return tool.getPersistentData().contains(PERSISTENT_UUID_KEY);
     }
 }

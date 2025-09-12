@@ -1,0 +1,10 @@
+{
+  "modifier.tinker_zenith.flying_sword": "御剑术",
+  "modifier.tinker_zenith.flying_sword.flavor": "这把工具似乎萌生了灵智, 她现在跟定你了(?)",
+  "modifier.tinker_zenith.flying_sword.description": "放在快捷栏中且不在副手时生成飞剑",
+  "tinker_zenith.tooltip.flying_sword": "已生成飞剑",
+
+  "modifier.tinker_zenith.nine_sword": "九剑归一诀",
+  "modifier.tinker_zenith.nine_sword.flavor": "嗯? 为什么我的天顶剑配方里有宇宙锭?",
+  "modifier.tinker_zenith.nine_sword.description": "长按右键发射所有飞剑!"
+}
