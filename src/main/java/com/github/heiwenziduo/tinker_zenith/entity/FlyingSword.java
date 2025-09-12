@@ -3,6 +3,7 @@ package com.github.heiwenziduo.tinker_zenith.entity;
 import com.github.heiwenziduo.tinker_zenith.api.FlyingSwordCollideCallback;
 import com.github.heiwenziduo.tinker_zenith.initializer.InitEntity;
 import com.github.heiwenziduo.tinker_zenith.utility.Abbr;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
@@ -18,9 +19,11 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.entity.IEntityAdditionalSpawnData;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -67,7 +70,8 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     private FlyingSwordCollideCallback callback;
 
     // normalAttributes
-    public boolean noPhysics = true;
+    public final boolean noPhysics = true;
+    public final boolean invulnerable = true;
     private Player master;
     private String masterUUID;
     private BEHAVIOR_MODE_LIST behaviorMode = BEHAVIOR_MODE_LIST.IDLE;
@@ -105,10 +109,6 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
         callback = lambda;
         master = player;
 
-//        System.out.println(slotNumber + "initial: " + "\nmaster"+ player + "\nUUID:" + masterUUID);
-//        System.out.println(slotNumber + "clientSide?: " + level().isClientSide);
-//        System.out.println(slotNumber + "addToWorld?:" + isAddedToWorld());
-
         setPos(master.position().add(0,2,0));
         generateSmokeParticle();
         Abbr.setPlayerSwords(master, slot, this);
@@ -117,6 +117,9 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     // 基础实体行为设定
     // public boolean isAlwaysTicking() { return true; }
     public boolean isAttackable() {
+        return false;
+    }
+    public boolean mayInteract(Level pLevel, BlockPos pPos) {
         return false;
     }
     public boolean skipAttackInteraction(Entity pEntity) {
@@ -131,7 +134,19 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     public boolean canChangeDimensions() {
         return false;
     }
+    public @NotNull PushReaction getPistonPushReaction() {
+        return PushReaction.IGNORE;
+    }
     // public float getLightLevelDependentMagicValue() { return 1.0F; }
+    public boolean isInvulnerable() {
+        return true;
+    }
+    public boolean ignoreExplosion() {
+        return true;
+    }
+    public boolean fireImmune() {
+        return true;
+    }
 
 
     @Override
@@ -347,17 +362,6 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
             RecoupingMode();
         }
     }
-    /// 碰撞和实体交互, 应当只在服务端执行
-    private boolean checkHitBoxCollide() {
-        // todo 引用玩家攻击 参: @sakuraTinker 工匠箭矢
-        AABB aabb = AABB.ofSize(position(), 1, 1, 1);
-        List<? extends Entity> entitiesList = level().getEntities(this, aabb,
-                e -> e instanceof LivingEntity && e.isPickable() && e.isAlive() && e != master);
-        for(var targetEntity : entitiesList){
-            if(callback != null) callback.onCollide(targetEntity);
-        }
-        return false;
-    }
 
     public boolean triggerLunch(Vec3 targetPoint, float pitch, float yaw) {
         if(!canLunch()) return false;
@@ -459,6 +463,19 @@ public class FlyingSword extends Entity implements IEntityAdditionalSpawnData {
     /** 获取就绪状态 */
     private boolean canLunch() {
         return lunchCooldown <= 0 && Objects.equals(getBehaviorMode(), BEHAVIOR_MODE_LIST.IDLE);
+    }
+
+    /// 碰撞和实体交互, 应当只在服务端执行
+    private boolean checkHitBoxCollide() {
+        // todo 引用玩家攻击 参: @sakuraTinker 工匠箭矢
+        // todo 检测路径上的碰撞, 而不单单是目标地点的, 前者在高速移动下表现更好
+        AABB aabb = AABB.ofSize(position(), 1, 1, 1);
+        List<? extends Entity> entitiesList = level().getEntities(this, aabb,
+                e -> e instanceof LivingEntity && e.isPickable() && e.isAlive() && e != master);
+        for(var targetEntity : entitiesList){
+            if(callback != null) callback.onCollide(targetEntity);
+        }
+        return false;
     }
 
     @Override

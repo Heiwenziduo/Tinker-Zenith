@@ -19,9 +19,8 @@ public class InitEntity {
             ENTITY_TYPES.register("flying_sword", () -> EntityType.Builder
                     .<FlyingSword>of(FlyingSword::new, MobCategory.MISC)
                     .sized(.5F, .5F)
-                    .fireImmune()
-                    .clientTrackingRange(16)
-                    .updateInterval(1) // default: 3, 越快动画越流畅(?)，cpu负担越大  // 或许插值比实际算的流畅? 待测试
+                    .clientTrackingRange(10)
+                    .updateInterval(3) // default: 3
                     .build(ResourceLocation.fromNamespaceAndPath(TinkerZenith.ModId, "flying_sword").toString())
             );
 
